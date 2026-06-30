@@ -1,0 +1,48 @@
+{
+  "timeZone": "Asia/Shanghai",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/script.locale",
+    "https://www.googleapis.com/auth/calendar.addons.execute",
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/documents",
+    "https://www.googleapis.com/auth/drive.file"
+  ],
+  "addOns": {
+    "common": {
+      "name": "Meeting Notes Assistant",
+      "logoUrl": "https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png",
+      "homepageTrigger": {
+        "runFunction": "buildHomepage",
+        "enabled": true
+      },
+      "layoutProperties": {
+        "primaryColor": "#2563eb",
+        "secondaryColor": "#188038"
+      },
+      "openLinkUrlPrefixes": ["https://docs.google.com/"]
+    },
+    "calendar": {
+      "homepageTrigger": {
+        "runFunction": "buildHomepage",
+        "enabled": true
+      },
+      "eventOpenTrigger": {
+        "runFunction": "buildEventCard"
+      }
+    },
+    "docs": {
+      "homepageTrigger": {
+        "runFunction": "buildHomepage",
+        "enabled": true
+      }
+    },
+    "drive": {
+      "homepageTrigger": {
+        "runFunction": "buildHomepage",
+        "enabled": true
+      }
+    }
+  }
+}

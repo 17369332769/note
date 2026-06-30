@@ -1,0 +1,16 @@
+.next*/
+.log/
+.agents/
+.codex/
+node_modules/
+dist/
+coverage/
+tsconfig.tsbuildinfo
+.env
+.env.local
+.env.*.local
+plugins/**/appscript/.clasp.json
+plugins/**/appscript/.clasprc.json
+*.log
+
+.vercel

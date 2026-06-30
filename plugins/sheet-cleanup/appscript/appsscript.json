@@ -1,0 +1,36 @@
+{
+  "timeZone": "Asia/Shanghai",
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/script.locale",
+    "https://www.googleapis.com/auth/spreadsheets.currentonly",
+    "https://www.googleapis.com/auth/drive.file"
+  ],
+  "addOns": {
+    "common": {
+      "name": "Sheet Cleanup Toolkit",
+      "logoUrl": "https://www.gstatic.com/images/branding/product/1x/sheets_48dp.png",
+      "homepageTrigger": {
+        "runFunction": "buildHomepage",
+        "enabled": true
+      },
+      "layoutProperties": {
+        "primaryColor": "#188038",
+        "secondaryColor": "#fbbc04"
+      }
+    },
+    "sheets": {
+      "homepageTrigger": {
+        "runFunction": "buildHomepage",
+        "enabled": true
+      }
+    },
+    "drive": {
+      "homepageTrigger": {
+        "runFunction": "buildHomepage",
+        "enabled": true
+      }
+    }
+  }
+}
