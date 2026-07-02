@@ -1,33 +1,34 @@
 const SESSION_STORE_KEY = 'annotationSessions';
 const SESSION_RECORD_PREFIX = 'annotationSession:';
-const OUTPUT_FOLDER_NAME = 'Image Markup Outputs';
+const ANONYMOUS_USER_KEY = 'anonymousUserKey';
 const SESSION_TTL_HOURS = 24;
 
 /**
- * Creates a session, persists the source image in Drive, and returns editor metadata.
+ * Creates a session and returns editor metadata.
  *
  * @param {string} host Host key.
  * @param {Object} source ImageSource.
  * @return {Object}
  */
 function createSessionForSource_(host, source) {
-  const blob = getSourceImageBlob_(host, source);
-  const folder = getOutputFolder_();
   const sourceLabel = source.filename || source.label || 'workspace-image';
-  const originalFile = folder.createFile(blob.setName(sourceLabel));
   const id = Utilities.getUuid();
   const now = new Date().toISOString();
   const session = {
     id: id,
-    userEmailHash: hashUserEmail_(),
+    userKey: getAnonymousUserKey_(),
     host: host,
     source: source,
     status: 'draft',
     createdAt: now,
     updatedAt: now,
     expiresAt: new Date(Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000).toISOString(),
-    originalImageFileId: originalFile.getId(),
-    editorUrl: buildEditorUrl_(id, sourceLabel)
+    editorUrl: buildHostedEditorUrl_({
+      sessionId: id,
+      sourceLabel: sourceLabel,
+      apptype: getPluginAppTypeForHost_(host),
+      localUpload: source.type === 'local-upload' ? 1 : 0
+    })
   };
 
   saveSession_(session);
@@ -42,30 +43,30 @@ function createSessionForSource_(host, source) {
  * @return {Blob}
  */
 function getSourceImageBlob_(host, source) {
-  if (source.type === 'drive-file') return getDriveImageBlob_(source);
   if (source.type === 'docs-inline-image') return getDocsImageBlob_(source);
-  if (source.type === 'slides-image') return getSlidesImageBlob_(source);
-  if (source.type === 'image-url') return getImageUrlBlob_(source);
-  if (host === 'drive') return getDriveImageBlob_(source);
+  if (source.type === 'local-upload') throw new Error('Local uploads are saved after the editor uploads an image.');
   if (host === 'docs') return getDocsImageBlob_(source);
-  if (host === 'slides') return getSlidesImageBlob_(source);
-  throw new Error('Unsupported image source.');
+  throw new Error('当前版本只支持 Google Docs 中的图片。');
 }
 
 /**
- * Builds the external editor URL for a session.
+ * Maps Workspace host keys into the plugin environment model.
  *
- * @param {string} sessionId Session ID.
- * @param {string} sourceLabel Label.
+ * @param {string} host Workspace host key.
  * @return {string}
  */
-function buildEditorUrl_(sessionId, sourceLabel) {
-  const params = [
-    'sessionId=' + encodeURIComponent(sessionId),
-    'sourceLabel=' + encodeURIComponent(sourceLabel)
-  ];
+function getPluginAppTypeForHost_(host) {
+  return 'addon';
+}
 
-  return getEditorBaseUrl_() + '/image-markup?' + params.join('&');
+/**
+ * Normalizes external app type values.
+ *
+ * @param {string=} appType Plugin app type.
+ * @return {string}
+ */
+function normalizePluginAppType_(appType) {
+  return 'addon';
 }
 
 /**
@@ -151,34 +152,22 @@ function requireSessionFromEvent_(event) {
   const parameters = event && event.parameters ? event.parameters : {};
   const session = getSession_(parameters.sessionId);
   if (!session) {
-    throw new Error('Annotation session was not found.');
+    throw new Error('找不到标注会话。');
   }
   return session;
 }
 
 /**
- * Returns or creates the output folder.
- *
- * @return {GoogleAppsScript.Drive.Folder}
- */
-function getOutputFolder_() {
-  const folders = DriveApp.getFoldersByName(OUTPUT_FOLDER_NAME);
-  if (folders.hasNext()) {
-    return folders.next();
-  }
-  return DriveApp.createFolder(OUTPUT_FOLDER_NAME);
-}
-
-/**
- * Hashes the current user email when available.
+ * Returns a per-user anonymous key without requesting email scopes.
  *
  * @return {string}
  */
-function hashUserEmail_() {
-  const email = Session.getActiveUser().getEmail() || 'unknown-user';
-  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, email);
-  return digest.map(function (byte) {
-    const value = (byte + 256) % 256;
-    return ('0' + value.toString(16)).slice(-2);
-  }).join('');
+function getAnonymousUserKey_() {
+  const properties = PropertiesService.getUserProperties();
+  const existing = properties.getProperty(ANONYMOUS_USER_KEY);
+  if (existing) return existing;
+
+  const created = Utilities.getUuid();
+  properties.setProperty(ANONYMOUS_USER_KEY, created);
+  return created;
 }

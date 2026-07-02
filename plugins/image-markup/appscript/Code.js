@@ -3,7 +3,6 @@ const SUPPORTED_IMAGE_MIME_TYPES = [
   'image/png',
   'image/jpeg',
   'image/jpg',
-  'image/gif',
   'image/webp'
 ];
 
@@ -17,7 +16,7 @@ function onOpen(event) {
   if (!ui) return;
 
   ui.createAddonMenu()
-    .addItem('Start', 'showImageMarkupDialog')
+    .addItem('Start', 'showImageMarkupSidebar')
     .addToUi();
 }
 
@@ -31,40 +30,140 @@ function onInstall(event) {
 }
 
 /**
- * Opens the Image Markup editor from the Extensions menu.
+ * Opens the Image Markup launcher sidebar from the Extensions menu.
  */
-function showImageMarkupDialog() {
+function showImageMarkupSidebar() {
   const ui = getEditorUi_();
   if (!ui) {
-    throw new Error('Open this add-on from Google Docs or Slides.');
+    throw new Error('请从 Google Docs 打开此插件。');
   }
 
-  const html = HtmlService.createHtmlOutputFromFile('Editor')
-    .setTitle(ADDON_NAME);
-
-  ui.showSidebar(html);
+  ui.showSidebar(buildLauncherSidebarHtml_());
 }
 
 /**
- * Returns the active editor UI for Docs or Slides.
+ * Backward-compatible menu entry for older deployments.
+ */
+function showImageMarkupDialog() {
+  showImageMarkupSidebar();
+}
+
+/**
+ * Opens the full editor in a Docs dialog.
+ *
+ * @param {Object=} params Editor query parameters.
+ */
+function openImageMarkupEditorDialog(params) {
+  const ui = getEditorUi_();
+  if (!ui) {
+    throw new Error('请从 Google Docs 打开此插件。');
+  }
+
+  const html = buildEditorHtml_(Object.assign({ apptype: 'addon' }, params || {}))
+    .setWidth(1180)
+    .setHeight(760);
+
+  ui.showModalDialog(html, ADDON_NAME);
+}
+
+/**
+ * Opens the default full editor dialog from HtmlService callbacks.
+ */
+function openDefaultImageMarkupEditorDialog() {
+  openImageMarkupEditorDialog({ apptype: 'addon' });
+}
+
+/**
+ * Opens a prepared editor session from the launcher sidebar.
+ *
+ * @param {string} sessionId Prepared session ID.
+ */
+function openPreparedImageMarkupEditorDialog(sessionId) {
+  const session = getSession_(sessionId);
+  if (!session) {
+    throw new Error('找不到已上传的图片会话。');
+  }
+
+  openImageMarkupEditorDialog({
+    sessionId: session.id,
+    sourceLabel: session.source && (session.source.originalFilename || session.source.filename || session.source.label),
+    apptype: 'addon',
+    localUpload: session.source && session.source.type === 'local-upload' ? 1 : 0
+  });
+}
+
+/**
+ * Builds the lightweight launcher sidebar.
+ *
+ * @return {GoogleAppsScript.HTML.HtmlOutput}
+ */
+function buildLauncherSidebarHtml_() {
+  const template = HtmlService.createTemplateFromFile('Sidebar');
+  template.sidebarUrl = buildHostedSidebarUrl_();
+
+  return template
+    .evaluate()
+    .setTitle(ADDON_NAME);
+}
+
+/**
+ * Builds the lightweight HtmlService shell that loads the deployed editor.
+ *
+ * @param {Object=} params Editor query parameters.
+ * @return {GoogleAppsScript.HTML.HtmlOutput}
+ */
+function buildEditorHtml_(params) {
+  const template = HtmlService.createTemplateFromFile('Dialog');
+  template.editorUrl = buildHostedEditorUrl_(params || {});
+
+  return template
+    .evaluate()
+    .setTitle(ADDON_NAME)
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/**
+ * Builds a hosted editor URL without depending on compiled Next.js assets.
+ *
+ * @param {Object} params Editor query parameters.
+ * @return {string}
+ */
+function buildHostedEditorUrl_(params) {
+  const query = [];
+  const appType = normalizePluginAppType_(params.apptype || params.appType);
+
+  query.push('apptype=' + encodeURIComponent(appType));
+  query.push('bridge=1');
+
+  if (params.sessionId) query.push('sessionId=' + encodeURIComponent(params.sessionId));
+  if (params.sourceLabel) query.push('sourceLabel=' + encodeURIComponent(params.sourceLabel));
+  if (params.localUpload === '1' || params.localUpload === 1 || params.localUpload === true) {
+    query.push('localUpload=1');
+  }
+
+  return getEditorBaseUrl_().replace(/\/+$/, '') + '/image-markup?' + query.join('&');
+}
+
+/**
+ * Builds the hosted sidebar URL for the HtmlService launcher iframe.
+ *
+ * @return {string}
+ */
+function buildHostedSidebarUrl_() {
+  return getEditorBaseUrl_().replace(/\/+$/, '') + '/image-markup/sidebar?apptype=addon&bridge=1';
+}
+
+/**
+ * Returns the active Google Docs UI.
  *
  * @return {GoogleAppsScript.Base.Ui|null}
  */
 function getEditorUi_() {
-  const uiFactories = [
-    function () { return DocumentApp.getUi(); },
-    function () { return SlidesApp.getUi(); }
-  ];
-
-  for (let index = 0; index < uiFactories.length; index += 1) {
-    try {
-      return uiFactories[index]();
-    } catch (error) {
-      // Try the next host app.
-    }
+  try {
+    return DocumentApp.getUi();
+  } catch (error) {
+    return null;
   }
-
-  return null;
 }
 
 /**

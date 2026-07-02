@@ -12,7 +12,7 @@ This plugin is a Google Workspace add-on template for spreadsheet cleanup action
 
 ```powershell
 cd plugins/sheet-cleanup/appscript
-npx clasp login
-npx clasp create --type standalone --title "Sheet Cleanup Toolkit"
-npx clasp push
+pnpm exec clasp login
+pnpm exec clasp create --type standalone --title "Sheet Cleanup Toolkit"
+pnpm exec clasp push
 ```

@@ -8,25 +8,21 @@ function buildHomeCard_(event) {
   const host = detectHost_(event);
 
   if (host === 'docs') return buildDocsSourceCard_('document');
-  if (host === 'slides') return buildSlidesSourceCard_();
-  if (host === 'drive') return buildDriveHomeCard_();
 
-  return buildUnsupportedCard_('Unsupported environment', 'This add-on currently supports Drive, Docs, and Slides.');
+  return buildUnsupportedCard_('暂不支持', '当前版本只支持 Google Docs。请在 Google Docs 中打开 Image Markup。');
 }
 
 /**
- * Builds the Drive homepage when no Drive item selection event is present.
+ * Builds the unsupported external-file-source card.
  *
  * @return {CardService.Card}
  */
-function buildDriveHomeCard_() {
+function buildUnsupportedFileSourceCard_() {
   const section = CardService.newCardSection()
-    .addWidget(CardService.newTextParagraph().setText('Select an image file in Drive, then reopen this add-on and choose Annotate from the selected image card.'))
-    .addWidget(CardService.newTextButton().setText('View recent sessions').setOnClickAction(CardService.newAction().setFunctionName('showRecentSessions')))
-    .addWidget(CardService.newTextButton().setText('Settings').setOnClickAction(CardService.newAction().setFunctionName('showSettings')));
+    .addWidget(CardService.newTextParagraph().setText('当前版本只支持 Google Docs。请在 Docs 侧边栏中选择文档图片或本地上传。'));
 
   return CardService.newCardBuilder()
-    .setHeader(CardService.newCardHeader().setTitle(ADDON_NAME).setSubtitle('drive'))
+    .setHeader(CardService.newCardHeader().setTitle(ADDON_NAME).setSubtitle('Docs only'))
     .addSection(section)
     .build();
 }
@@ -60,7 +56,6 @@ function detectHost_(event) {
     ? String(event.commonEventObject.hostApp).toLowerCase()
     : '';
 
-  if (hostApp.indexOf('drive') !== -1) return 'drive';
   if (hostApp.indexOf('docs') !== -1) return 'docs';
   if (hostApp.indexOf('slides') !== -1) return 'slides';
   return hostApp || 'unsupported';
@@ -90,10 +85,10 @@ function buildUnsupportedCard_(title, message) {
  */
 function buildImageListCard_(title, images, host) {
   const builder = CardService.newCardBuilder()
-    .setHeader(CardService.newCardHeader().setTitle(title).setSubtitle(images.length + ' image source(s) found'));
+    .setHeader(CardService.newCardHeader().setTitle(title).setSubtitle('找到 ' + images.length + ' 张图片'));
 
   if (!images.length) {
-    builder.addSection(CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('No images were found in the current file.')));
+    builder.addSection(CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('当前文档中没有找到图片。')));
     return builder.build();
   }
 
@@ -107,7 +102,7 @@ function buildImageListCard_(title, images, host) {
 
     const section = CardService.newCardSection()
       .addWidget(CardService.newKeyValue().setTopLabel(image.label || 'Image ' + (index + 1)).setContent(buildImageMeta_(image)))
-      .addWidget(CardService.newTextButton().setText('Annotate').setOnClickAction(action));
+      .addWidget(CardService.newTextButton().setText('打开标注编辑器').setOnClickAction(action));
 
     if (image.previewUrl) {
       section.addWidget(CardService.newImage().setImageUrl(image.previewUrl).setAltText(image.label || 'Image preview'));
@@ -130,7 +125,7 @@ function buildImageMeta_(image) {
   if (image.filename) parts.push(image.filename);
   if (image.mimeType) parts.push(image.mimeType);
   if (image.width && image.height) parts.push(image.width + ' x ' + image.height);
-  return parts.join(' | ') || 'Ready for markup';
+  return parts.join(' | ') || '可标注';
 }
 
 /**
@@ -143,8 +138,21 @@ function createAnnotationSession(event) {
   try {
     const parameters = event && event.parameters ? event.parameters : {};
     const source = JSON.parse(parameters.sourceJson || '{}');
-    const host = parameters.host || source.host || 'drive';
+    const host = parameters.host || source.host || 'docs';
     const session = createSessionForSource_(host, source);
+    if (host === 'docs') {
+      openImageMarkupEditorDialog({
+        sessionId: session.id,
+        sourceLabel: session.source && (session.source.filename || session.source.label),
+        apptype: 'addon',
+        localUpload: session.source && session.source.type === 'local-upload' ? 1 : 0
+      });
+
+      return CardService.newActionResponseBuilder()
+        .setNotification(CardService.newNotification().setText('已在弹窗中打开标注编辑器。'))
+        .build();
+    }
+
     const openLink = CardService.newOpenLink()
       .setUrl(session.editorUrl)
       .setOpenAs(CardService.OpenAs.FULL_SIZE)
@@ -152,7 +160,7 @@ function createAnnotationSession(event) {
 
     return CardService.newActionResponseBuilder()
       .setOpenLink(openLink)
-      .setNotification(CardService.newNotification().setText('Annotation session created.'))
+      .setNotification(CardService.newNotification().setText('已创建标注会话。'))
       .build();
   } catch (error) {
     return buildErrorResponse_(error);
@@ -176,10 +184,10 @@ function showRecentSessions() {
 function buildRecentSessionsCard_() {
   const sessions = listRecentSessions_();
   const builder = CardService.newCardBuilder()
-    .setHeader(CardService.newCardHeader().setTitle('Recent annotation sessions').setSubtitle(ADDON_NAME));
+    .setHeader(CardService.newCardHeader().setTitle('最近会话').setSubtitle(ADDON_NAME));
 
   if (!sessions.length) {
-    builder.addSection(CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('No sessions yet. Create one from Drive, Docs, or Slides.')));
+    builder.addSection(CardService.newCardSection().addWidget(CardService.newTextParagraph().setText('还没有会话。请先从文档图片或本地上传创建一个。')));
     return builder.build();
   }
 
@@ -187,22 +195,21 @@ function buildRecentSessionsCard_() {
     const section = CardService.newCardSection()
       .addWidget(CardService.newKeyValue().setTopLabel(session.source && session.source.label ? session.source.label : session.id).setContent(session.host + ' | ' + session.status + ' | ' + session.createdAt));
 
-    if (session.originalImageFileId) {
-      section.addWidget(CardService.newTextButton().setText('Open original').setOpenLink(CardService.newOpenLink().setUrl('https://drive.google.com/open?id=' + session.originalImageFileId)));
+    if (session.source && session.source.r2Key) {
+      section.addWidget(CardService.newTextButton().setText('打开原图').setOpenLink(CardService.newOpenLink().setUrl(createR2DownloadUrl_(session.source.r2Key))));
     }
-    if (session.annotatedImageFileId) {
-      section.addWidget(CardService.newTextButton().setText('Open annotated image').setOpenLink(CardService.newOpenLink().setUrl('https://drive.google.com/open?id=' + session.annotatedImageFileId)));
+    if (session.annotatedImageR2Key) {
+      section.addWidget(CardService.newTextButton().setText('打开标注图').setOpenLink(CardService.newOpenLink().setUrl(createR2DownloadUrl_(session.annotatedImageR2Key))));
     }
-    if (session.editBriefFileId) {
-      section.addWidget(CardService.newTextButton().setText('Open edit brief').setOpenLink(CardService.newOpenLink().setUrl('https://drive.google.com/open?id=' + session.editBriefFileId)));
+    if (session.revisedImageR2Key) {
+      section.addWidget(CardService.newTextButton().setText('打开修订图').setOpenLink(CardService.newOpenLink().setUrl(createR2DownloadUrl_(session.revisedImageR2Key))));
     }
-    if (session.host === 'docs' && session.annotatedImageFileId) {
-      section.addWidget(CardService.newTextButton().setText('Insert annotated copy').setOnClickAction(CardService.newAction().setFunctionName('insertIntoDocs').setParameters({ sessionId: session.id })));
+    if (session.editBriefR2Key) {
+      section.addWidget(CardService.newTextButton().setText('打开修改说明').setOpenLink(CardService.newOpenLink().setUrl(createR2DownloadUrl_(session.editBriefR2Key))));
     }
-    if (session.host === 'slides' && session.annotatedImageFileId) {
-      section.addWidget(CardService.newTextButton().setText('Insert annotated copy').setOnClickAction(CardService.newAction().setFunctionName('insertIntoSlides').setParameters({ sessionId: session.id })));
+    if (session.host === 'docs' && (session.annotatedImageR2Key || session.revisedImageR2Key)) {
+      section.addWidget(CardService.newTextButton().setText(session.revisedImageR2Key ? '插入修订副本' : '插入标注副本').setOnClickAction(CardService.newAction().setFunctionName('insertIntoDocs').setParameters({ sessionId: session.id })));
     }
-
     builder.addSection(section);
   });
 
@@ -217,11 +224,11 @@ function buildRecentSessionsCard_() {
 function showSettings() {
   const baseUrl = getEditorBaseUrl_();
   const card = CardService.newCardBuilder()
-    .setHeader(CardService.newCardHeader().setTitle('Settings').setSubtitle(ADDON_NAME))
+    .setHeader(CardService.newCardHeader().setTitle('设置').setSubtitle(ADDON_NAME))
     .addSection(
       CardService.newCardSection()
-        .addWidget(CardService.newKeyValue().setTopLabel('Editor base URL').setContent(baseUrl))
-        .addWidget(CardService.newTextParagraph().setText('Set script property EDITOR_BASE_URL to your deployed Next.js origin before production testing.'))
+        .addWidget(CardService.newKeyValue().setTopLabel('编辑器地址').setContent(baseUrl))
+        .addWidget(CardService.newTextParagraph().setText('生产测试前，请把脚本属性 EDITOR_BASE_URL 设置为已部署的 Next.js 域名。'))
     )
     .build();
 

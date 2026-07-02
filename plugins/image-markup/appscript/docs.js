@@ -17,14 +17,12 @@ function buildDocsHomeCard(event) {
 function buildDocsSourceCard_(activeTab) {
   const tab = activeTab || 'document';
   const builder = CardService.newCardBuilder()
-    .setHeader(CardService.newCardHeader().setTitle(ADDON_NAME).setSubtitle('doc'));
+    .setHeader(CardService.newCardHeader().setTitle(ADDON_NAME).setSubtitle('Google Docs'));
 
   builder.addSection(buildDocsTabBarSection_(tab));
 
   if (tab === 'upload') {
     builder.addSection(buildDocsUploadSection_());
-  } else if (tab === 'url') {
-    builder.addSection(buildDocsUrlSection_());
   } else {
     builder.addSection(buildDocsDocumentSection_());
   }
@@ -54,8 +52,7 @@ function buildDocsTabBarSection_(activeTab) {
 function buildDocsSourceTabs_(activeTab) {
   return CardService.newButtonSet()
     .addButton(buildDocsSourceTabButton_('文档图片', 'document', activeTab))
-    .addButton(buildDocsSourceTabButton_('上传', 'upload', activeTab))
-    .addButton(buildDocsSourceTabButton_('地址', 'url', activeTab));
+    .addButton(buildDocsSourceTabButton_('本地上传', 'upload', activeTab));
 }
 
 /**
@@ -107,20 +104,9 @@ function buildDocsDocumentSection_() {
  * @return {CardService.CardSection}
  */
 function buildDocsUploadSection_() {
-  const uploadUrl = getEditorBaseUrl_() + '/image-markup?sourceLabel=' + encodeURIComponent('Uploaded image') + '&localUpload=1';
   return CardService.newCardSection()
-    .addWidget(CardService.newTextButton().setText('上传图片').setOpenLink(CardService.newOpenLink().setUrl(uploadUrl).setOpenAs(CardService.OpenAs.FULL_SIZE)));
-}
-
-/**
- * Builds the image URL source section.
- *
- * @return {CardService.CardSection}
- */
-function buildDocsUrlSection_() {
-  return CardService.newCardSection()
-    .addWidget(CardService.newTextInput().setFieldName('imageUrl').setTitle('图片地址'))
-    .addWidget(CardService.newTextButton().setText('打开图片地址').setOnClickAction(CardService.newAction().setFunctionName('createDocsImageUrlSession')));
+    .addWidget(CardService.newTextParagraph().setText('打开编辑器后在页面内上传 PNG、JPEG 或 WebP 图片。'))
+    .addWidget(CardService.newTextButton().setText('上传本地图片').setOnClickAction(CardService.newAction().setFunctionName('createDocsLocalUploadSession')));
 }
 
 /**
@@ -130,9 +116,9 @@ function buildDocsUrlSection_() {
  */
 function buildDocsUtilitySection_() {
   return CardService.newCardSection()
-    .setHeader('More')
-    .addWidget(CardService.newTextButton().setText('Recent sessions').setOnClickAction(CardService.newAction().setFunctionName('showRecentSessions')))
-    .addWidget(CardService.newTextButton().setText('Settings').setOnClickAction(CardService.newAction().setFunctionName('showSettings')));
+    .setHeader('更多')
+    .addWidget(CardService.newTextButton().setText('最近会话').setOnClickAction(CardService.newAction().setFunctionName('showRecentSessions')))
+    .addWidget(CardService.newTextButton().setText('设置').setOnClickAction(CardService.newAction().setFunctionName('showSettings')));
 }
 
 /**
@@ -144,58 +130,141 @@ function scanDocsImages() {
   try {
     const doc = DocumentApp.getActiveDocument();
     if (!doc) {
-      return navigateToCard_(buildUnsupportedCard_('No active document', 'Open a Google Doc before scanning for images.'));
+      return navigateToCard_(buildUnsupportedCard_('未打开文档', '请先打开一个 Google Doc，再选择图片。'));
     }
 
     const images = getDocsInlineImages_(doc);
-    return navigateToCard_(buildImageListCard_('Current Doc images', images, 'docs'));
+    return navigateToCard_(buildImageListCard_('当前文档图片', images, 'docs'));
   } catch (error) {
     return buildErrorResponse_(error);
   }
 }
 
 /**
- * Creates an annotation session from an image URL entered in Docs.
+ * Returns Docs inline images for the HtmlService sidebar.
+ *
+ * @return {Object}
+ */
+function listDocsImagesForSidebar() {
+  const doc = DocumentApp.getActiveDocument();
+  if (!doc) {
+    throw new Error('请先打开一个 Google Doc，再选择图片。');
+  }
+
+  return {
+    ok: true,
+    images: getDocsInlineImages_(doc)
+  };
+}
+
+/**
+ * Creates a prepared editor session for a Docs inline image.
+ *
+ * @param {number|string} imageIndex Image index from listDocsImagesForSidebar.
+ * @return {Object}
+ */
+function createDocsImageSessionFromSidebar(imageIndex) {
+  const doc = DocumentApp.getActiveDocument();
+  if (!doc) {
+    throw new Error('请先打开一个 Google Doc，再选择图片。');
+  }
+
+  const images = getDocsInlineImages_(doc);
+  const index = Number(imageIndex);
+  const source = images[index];
+  if (!source) {
+    throw new Error('找不到所选文档图片。');
+  }
+
+  const session = createSessionForSource_('docs', source);
+  return {
+    ok: true,
+    sessionId: session.id,
+    label: source.label,
+    width: source.width,
+    height: source.height
+  };
+}
+
+/**
+ * Creates an annotation session for a local upload from Docs.
  *
  * @param {Object} event Workspace action event.
  * @return {CardService.ActionResponse}
  */
-function createDocsImageUrlSession(event) {
+function createDocsLocalUploadSession(event) {
   try {
-    const values = getFormValues_(event);
-    const imageUrl = String(values.imageUrl || '').trim();
-    if (!imageUrl) {
-      throw new Error('Enter an image address.');
-    }
-    if (!/^https?:\/\//i.test(imageUrl)) {
-      throw new Error('Use an http or https image address.');
-    }
-
     const doc = DocumentApp.getActiveDocument();
     if (!doc) {
-      throw new Error('Open a Google Doc before using an image address.');
+      throw new Error('请先打开一个 Google Doc，再上传图片。');
     }
 
     const source = {
-      type: 'image-url',
+      type: 'local-upload',
       documentId: doc.getId(),
-      url: imageUrl,
-      label: 'Image address',
-      filename: getFilenameFromUrl_(imageUrl)
+      label: '本地上传图片',
+      filename: 'uploaded-image.png'
     };
     const session = createSessionForSource_('docs', source);
-    const openLink = CardService.newOpenLink()
-      .setUrl(session.editorUrl)
-      .setOpenAs(CardService.OpenAs.FULL_SIZE)
-      .setOnClose(CardService.OnClose.RELOAD_ADD_ON);
+    openImageMarkupEditorDialog({
+      sessionId: session.id,
+      sourceLabel: source.label,
+      apptype: 'addon',
+      localUpload: 1
+    });
 
     return CardService.newActionResponseBuilder()
-      .setOpenLink(openLink)
-      .setNotification(CardService.newNotification().setText('Annotation session created.'))
+      .setNotification(CardService.newNotification().setText('已在弹窗中打开上传编辑器。'))
       .build();
   } catch (error) {
     return buildErrorResponse_(error);
   }
+}
+
+/**
+ * Creates a Docs local-upload session from a sidebar file picker.
+ *
+ * @param {Object} payload Uploaded image payload.
+ * @return {Object}
+ */
+function createDocsUploadSessionFromSidebar(payload) {
+  const body = payload || {};
+  const doc = DocumentApp.getActiveDocument();
+  if (!doc) {
+    throw new Error('请先打开一个 Google Doc，再上传图片。');
+  }
+  if (!isSupportedImageMimeType_(body.mimeType)) {
+    throw new Error('仅支持 PNG、JPEG 或 WebP 图片。');
+  }
+  if (!body.r2Key) {
+    throw new Error('缺少已上传图片的 R2 key。');
+  }
+
+  const filename = body.name || 'uploaded-image';
+  const source = {
+    type: 'local-upload',
+    documentId: doc.getId(),
+    label: filename,
+    filename: filename,
+    originalFilename: filename,
+    mimeType: body.mimeType,
+    r2Key: String(body.r2Key),
+    size: body.size || null
+  };
+  const session = createSessionForSource_('docs', source);
+  session.editorUrl = buildHostedEditorUrl_({
+    sessionId: session.id,
+    sourceLabel: filename,
+    apptype: 'addon'
+  });
+  session.updatedAt = new Date().toISOString();
+  saveSession_(session);
+
+  return {
+    ok: true,
+    sessionId: session.id,
+    filename: filename
+  };
 }
 
 /**
@@ -215,7 +284,7 @@ function getDocsInlineImages_(doc) {
       images.push({
         type: 'docs-inline-image',
         documentId: doc.getId(),
-        label: 'Current document image ' + (index + 1),
+        label: '文档图片 ' + (index + 1),
         imageIndex: index,
         width: inlineImage.getWidth(),
         height: inlineImage.getHeight()
@@ -259,51 +328,10 @@ function getDocsImageBlob_(source) {
 
   const inlineImage = images[source.imageIndex];
   if (!inlineImage) {
-    throw new Error('The source inline image could not be found.');
+    throw new Error('找不到源文档图片。');
   }
 
   return inlineImage.getBlob().setName((source.label || 'doc-image') + '.png');
-}
-
-/**
- * Loads an image blob from a user-provided URL.
- *
- * @param {Object} source ImageSource.
- * @return {Blob}
- */
-function getImageUrlBlob_(source) {
-  const response = UrlFetchApp.fetch(source.url, {
-    followRedirects: true,
-    muteHttpExceptions: true
-  });
-  const status = response.getResponseCode();
-  if (status < 200 || status >= 300) {
-    throw new Error('The image address could not be loaded.');
-  }
-
-  const blob = response.getBlob();
-  const contentType = String(blob.getContentType() || '').toLowerCase();
-  if (!isSupportedImageMimeType_(contentType)) {
-    throw new Error('The image address must point to PNG, JPEG, GIF, or WebP.');
-  }
-
-  return blob.setName(source.filename || 'image-url');
-}
-
-/**
- * Returns a safe file name from a URL.
- *
- * @param {string} url Image URL.
- * @return {string}
- */
-function getFilenameFromUrl_(url) {
-  try {
-    const cleanUrl = String(url).split('#')[0].split('?')[0];
-    const name = decodeURIComponent(cleanUrl.split('/').filter(Boolean).pop() || '');
-    return name || 'image-url';
-  } catch (error) {
-    return 'image-url';
-  }
 }
 
 /**
@@ -315,19 +343,25 @@ function getFilenameFromUrl_(url) {
 function insertIntoDocs(event) {
   try {
     const session = requireSessionFromEvent_(event);
-    if (!session.annotatedImageFileId) {
-      throw new Error('Save the annotated image before inserting it.');
+    const outputImageR2Key = session.revisedImageR2Key || session.annotatedImageR2Key;
+    if (!outputImageR2Key) {
+      throw new Error('请先保存标注图或修订图，再插入文档。');
     }
 
     const doc = DocumentApp.openById(session.source.documentId);
     const body = doc.getBody();
-    const imageBlob = DriveApp.getFileById(session.annotatedImageFileId).getBlob();
-    body.appendParagraph('Annotated image: ' + (session.source.label || session.id)).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+    const imageBlob = fetchR2Blob_(outputImageR2Key, session.id + '-output.png', 'image/png');
+    const title = session.revisedImageR2Key ? '修订图：' : '标注图：';
+    body.appendParagraph(title + (session.source.label || session.id)).setHeading(DocumentApp.ParagraphHeading.HEADING3);
     body.appendImage(imageBlob);
 
-    if (session.editBriefFileId) {
-      const briefText = DriveApp.getFileById(session.editBriefFileId).getBlob().getDataAsString();
-      body.appendParagraph('Edit brief').setHeading(DocumentApp.ParagraphHeading.HEADING4);
+    const briefText = session.editBrief
+      ? JSON.stringify(session.editBrief, null, 2)
+      : session.editBriefR2Key
+        ? fetchR2Text_(session.editBriefR2Key)
+        : '';
+    if (briefText) {
+      body.appendParagraph('修改说明').setHeading(DocumentApp.ParagraphHeading.HEADING4);
       body.appendParagraph(briefText);
     }
 
@@ -336,9 +370,76 @@ function insertIntoDocs(event) {
     saveSession_(session);
 
     return CardService.newActionResponseBuilder()
-      .setNotification(CardService.newNotification().setText('Annotated image inserted into the Doc.'))
+      .setNotification(CardService.newNotification().setText(session.revisedImageR2Key ? '修订图已插入文档。' : '标注图已插入文档。'))
       .build();
   } catch (error) {
     return buildErrorResponse_(error);
   }
+}
+
+/**
+ * Downloads a private R2 object through a short-lived signed URL.
+ *
+ * @param {string} key R2 object key.
+ * @param {string} filename Blob filename.
+ * @param {string} fallbackMimeType Fallback MIME type.
+ * @return {Blob}
+ */
+function fetchR2Blob_(key, filename, fallbackMimeType) {
+  const downloadUrl = createR2DownloadUrl_(key);
+  const response = UrlFetchApp.fetch(downloadUrl, {
+    method: 'get',
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  if (status < 200 || status >= 300) {
+    throw new Error('无法下载 R2 图片。');
+  }
+
+  const headers = response.getHeaders();
+  const mimeType = headers['Content-Type'] || headers['content-type'] || fallbackMimeType || 'application/octet-stream';
+  return Utilities.newBlob(response.getContent(), mimeType, filename);
+}
+
+/**
+ * Downloads an R2 text object.
+ *
+ * @param {string} key R2 object key.
+ * @return {string}
+ */
+function fetchR2Text_(key) {
+  const downloadUrl = createR2DownloadUrl_(key);
+  const response = UrlFetchApp.fetch(downloadUrl, {
+    method: 'get',
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  if (status < 200 || status >= 300) {
+    throw new Error('无法下载 R2 文本。');
+  }
+  return response.getContentText();
+}
+
+/**
+ * Requests a signed R2 download URL from the hosted editor backend.
+ *
+ * @param {string} key R2 object key.
+ * @return {string}
+ */
+function createR2DownloadUrl_(key) {
+  const response = UrlFetchApp.fetch(getEditorBaseUrl_().replace(/\/+$/, '') + '/api/image-markup/r2/download-url', {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      key: key,
+      ttlSeconds: 900
+    }),
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  const json = JSON.parse(response.getContentText() || '{}');
+  if (status < 200 || status >= 300 || !json.ok || !json.downloadUrl) {
+    throw new Error(json.error || '无法创建 R2 下载链接。');
+  }
+  return json.downloadUrl;
 }

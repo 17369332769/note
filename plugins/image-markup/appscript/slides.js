@@ -90,13 +90,14 @@ function getSlidesImageBlob_(source) {
 function insertIntoSlides(event) {
   try {
     const session = requireSessionFromEvent_(event);
-    if (!session.annotatedImageFileId) {
+    const outputImageR2Key = session.revisedImageR2Key || session.annotatedImageR2Key;
+    if (!outputImageR2Key) {
       throw new Error('Save the annotated image before inserting it.');
     }
 
     const presentation = SlidesApp.openById(session.source.presentationId);
     const slide = findSlideByObjectId_(presentation, session.source.slideObjectId) || presentation.getSlides()[0];
-    const imageBlob = DriveApp.getFileById(session.annotatedImageFileId).getBlob();
+    const imageBlob = fetchR2Blob_(outputImageR2Key, session.id + '-output.png', 'image/png');
     const inserted = slide.insertImage(imageBlob);
     inserted.setLeft(24).setTop(24);
 

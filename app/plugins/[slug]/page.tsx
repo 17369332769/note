@@ -85,7 +85,7 @@ export default async function PluginPage({ params }: Props) {
           </div>
           <div>
             <Terminal size={18} />
-            <code>cd {plugin.appScriptPath} && npx clasp push</code>
+            <code>cd {plugin.appScriptPath} && pnpm exec clasp push</code>
           </div>
         </div>
       </section>

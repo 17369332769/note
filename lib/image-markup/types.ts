@@ -44,7 +44,37 @@ export type EditBrief = {
   annotations: Array<{
     type: "arrow" | "rectangle" | "freehand" | "text";
     text: string;
+    originalText?: string;
     bounds: { x: number; y: number; width: number; height: number };
     color: string;
   }>;
 };
+
+export type AiRevisionMetadata = {
+  provider: "runninghub";
+  taskId: string;
+  promptVersion: "image-markup-ai-edit-v1";
+  promptHash: string;
+  resolution: "1k";
+  quality: "low";
+  generatedAt: string;
+};
+
+export type AiRevisionRequest = {
+  sessionId: string;
+  originalImageDataUrl?: string;
+  annotatedImageDataUrl?: string;
+  preparedImageUrls?: [string, string];
+  editBrief: EditBrief;
+  aspectRatio?: string;
+};
+
+export type AiRevisionResponse =
+  | ({
+      ok: true;
+      revisedImageDataUrl: string;
+    } & AiRevisionMetadata)
+  | {
+      ok: false;
+      error: string;
+    };

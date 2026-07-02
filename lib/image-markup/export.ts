@@ -1,15 +1,22 @@
 import type { Annotation, EditBrief, Point } from "./types";
 
+const textFontFamily = "Arial, sans-serif";
+const textFontWeight = 700;
+const textLineHeightRatio = 1.25;
+const textHorizontalPadding = 8;
+const textVerticalPadding = 6;
+
 export function drawAnnotations(
   context: CanvasRenderingContext2D,
   annotations: Annotation[],
   selectedId?: string,
+  visualScale = 1,
 ) {
   annotations.forEach((annotation) => {
     context.save();
     context.strokeStyle = annotation.color;
     context.fillStyle = annotation.color;
-    context.lineWidth = annotation.lineWidth;
+    context.lineWidth = annotation.lineWidth * visualScale;
     context.lineCap = "round";
     context.lineJoin = "round";
 
@@ -27,16 +34,17 @@ export function drawAnnotations(
     }
 
     if (annotation.type === "text") {
-      context.font = `${Math.max(16, annotation.lineWidth * 7)}px Arial, sans-serif`;
+      context.font = getTextAnnotationFont(annotation.lineWidth, visualScale);
+      context.textBaseline = "alphabetic";
       context.fillText(annotation.text, annotation.position.x, annotation.position.y);
     }
 
     if (annotation.id === selectedId) {
-      const bounds = getAnnotationBounds(annotation);
+      const bounds = getAnnotationBounds(annotation, visualScale);
       context.setLineDash([6, 4]);
       context.strokeStyle = "#2563eb";
-      context.lineWidth = 1;
-      context.strokeRect(bounds.x - 6, bounds.y - 6, bounds.width + 12, bounds.height + 12);
+      context.lineWidth = 2;
+      context.strokeRect(bounds.x - 6 * visualScale, bounds.y - 6 * visualScale, bounds.width + 12 * visualScale, bounds.height + 12 * visualScale);
     }
 
     context.restore();
@@ -48,13 +56,14 @@ export function buildEditBrief(
   sourceLabel: string,
   globalInstruction: string,
   annotations: Annotation[],
+  visualScale = 1,
 ): EditBrief {
   return {
     sessionId,
     sourceLabel,
     globalInstruction,
     annotations: annotations.map((annotation) => {
-      const bounds = getAnnotationBounds(annotation);
+      const bounds = getAnnotationBounds(annotation, visualScale);
       return {
         type: annotation.type,
         text: annotation.type === "text" ? annotation.text : annotation.text || "",
@@ -70,6 +79,8 @@ export function exportCanvasPng(
   annotations: Annotation[],
   width: number,
   height: number,
+  contentScale = 1,
+  contentOffset: Point = { x: 0, y: 0 },
 ) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -80,12 +91,35 @@ export function exportCanvasPng(
     throw new Error("Canvas is not available.");
   }
 
-  context.drawImage(sourceImage, 0, 0, width, height);
+  context.fillStyle = "#f3f4f6";
+  context.fillRect(0, 0, width, height);
+  const imageFrame = getScaledImageFrame(width, height, contentScale, contentOffset);
+  context.drawImage(sourceImage, imageFrame.x, imageFrame.y, imageFrame.width, imageFrame.height);
+  context.save();
+  context.translate(imageFrame.x, imageFrame.y);
+  context.scale(contentScale, contentScale);
   drawAnnotations(context, annotations);
+  context.restore();
   return canvas.toDataURL("image/png");
 }
 
-export function getAnnotationBounds(annotation: Annotation) {
+export function getScaledImageFrame(
+  width: number,
+  height: number,
+  contentScale: number,
+  contentOffset: Point = { x: 0, y: 0 },
+) {
+  const scaledWidth = width * contentScale;
+  const scaledHeight = height * contentScale;
+  return {
+    x: (width - scaledWidth) / 2 + contentOffset.x,
+    y: (height - scaledHeight) / 2 + contentOffset.y,
+    width: scaledWidth,
+    height: scaledHeight,
+  };
+}
+
+export function getAnnotationBounds(annotation: Annotation, visualScale = 1) {
   if (annotation.type === "freehand") {
     const xs = annotation.points.map((point) => point.x);
     const ys = annotation.points.map((point) => point.y);
@@ -101,20 +135,51 @@ export function getAnnotationBounds(annotation: Annotation) {
   }
 
   return {
-    x: annotation.position.x,
-    y: annotation.position.y - 20,
-    width: Math.max(24, annotation.text.length * 9),
-    height: 28,
+    ...getTextAnnotationBounds(annotation.text, annotation.position, annotation.lineWidth, visualScale),
   };
 }
 
-export function hitTestAnnotation(annotation: Annotation, point: Point) {
-  const bounds = getAnnotationBounds(annotation);
+export function getTextAnnotationFont(lineWidth: number, visualScale = 1) {
+  return `${textFontWeight} ${getTextAnnotationFontSize(lineWidth, visualScale)}px ${textFontFamily}`;
+}
+
+export function getTextAnnotationFontSize(lineWidth: number, visualScale = 1) {
+  return Math.max(20 * visualScale, lineWidth * 8 * visualScale);
+}
+
+export function getTextAnnotationBounds(text: string, position: Point, lineWidth: number, visualScale = 1) {
+  const fontSize = getTextAnnotationFontSize(lineWidth, visualScale);
+  const textWidth = measureTextWidth(text, lineWidth, visualScale);
+  const height = fontSize * textLineHeightRatio;
+
+  return {
+    x: position.x - textHorizontalPadding * visualScale,
+    y: position.y - fontSize - textVerticalPadding * visualScale,
+    width: Math.max(32 * visualScale, textWidth) + textHorizontalPadding * 2 * visualScale,
+    height: height + textVerticalPadding * 2 * visualScale,
+  };
+}
+
+function measureTextWidth(text: string, lineWidth: number, visualScale = 1) {
+  const fontSize = getTextAnnotationFontSize(lineWidth, visualScale);
+  if (typeof document === "undefined") {
+    return Math.max(fontSize * 0.7, text.length * fontSize * 0.62);
+  }
+
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) return Math.max(fontSize * 0.7, text.length * fontSize * 0.62);
+  context.font = getTextAnnotationFont(lineWidth, visualScale);
+  return context.measureText(text || " ").width;
+}
+
+export function hitTestAnnotation(annotation: Annotation, point: Point, tolerance = 8, visualScale = 1) {
+  const bounds = getAnnotationBounds(annotation, visualScale);
   return (
-    point.x >= bounds.x - 8 &&
-    point.x <= bounds.x + bounds.width + 8 &&
-    point.y >= bounds.y - 8 &&
-    point.y <= bounds.y + bounds.height + 8
+    point.x >= bounds.x - tolerance &&
+    point.x <= bounds.x + bounds.width + tolerance &&
+    point.y >= bounds.y - tolerance &&
+    point.y <= bounds.y + bounds.height + tolerance
   );
 }
 
@@ -151,7 +216,7 @@ function drawFreehand(context: CanvasRenderingContext2D, points: Point[]) {
 
 function drawArrow(context: CanvasRenderingContext2D, start: Point, end: Point) {
   const angle = Math.atan2(end.y - start.y, end.x - start.x);
-  const headLength = 16;
+  const headLength = Math.max(22, context.lineWidth * 5);
 
   context.beginPath();
   context.moveTo(start.x, start.y);

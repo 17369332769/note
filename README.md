@@ -24,19 +24,32 @@ plugins/
 ## 本地开发
 
 ```powershell
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 本地开发时打开 `http://localhost:3000` 查看插件目录。线上地址是 `https://note-bice-seven.vercel.app`。
 
+图片标注编辑器支持用启动命令指定默认插件环境：
+
+```powershell
+pnpm dev:addon
+pnpm dev:drive
+```
+
+`dev:addon` 会使用 `apptype=addon` 的默认环境，`dev:drive` 会使用 `apptype=drive` 的默认环境；这里的 `drive` 只是网页展示/兼容环境类型，不代表使用 Google Drive API 或 Drive 存储。访问 `/image-markup?apptype=addon` 或 `/image-markup?apptype=drive` 仍然可以覆盖启动默认值。生产构建时使用 `pnpm build:addon` 或 `pnpm build:drive`。
+
+Apps Script 里的 `Dialog.html` 是稳定的轻量 iframe 壳，通过脚本属性 `EDITOR_BASE_URL` 加载部署后的 `/image-markup` 页面。因此发布网页时只需要运行 Next.js 构建，不需要把 `.next` 产物再复制进 Apps Script。
+
 ## 常用命令
 
 ```powershell
-npm run typecheck
-npm run lint
-npm run build
-npm run check
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm build:addon
+pnpm build:drive
+pnpm check
 ```
 
 ## 新增一个插件
@@ -44,7 +57,7 @@ npm run check
 1. 在 `plugins/` 下创建一个新目录，例如 `plugins/gmail-followup/`。
 2. 添加 `README.md` 和 `appscript/Code.gs`、`appscript/appsscript.json`。
 3. 在 `lib/plugins.ts` 里添加插件元数据。
-4. 运行 `npm run check` 确认网页项目仍然可构建。
+4. 运行 `pnpm check` 确认网页项目仍然可构建。
 
 ## Apps Script 工作流
 
@@ -52,9 +65,9 @@ npm run check
 
 ```powershell
 cd plugins/meeting-notes/appscript
-npx clasp login
-npx clasp create --type standalone --title "Meeting Notes Assistant"
-npx clasp push
+pnpm exec clasp login
+pnpm exec clasp create --type standalone --title "Meeting Notes Assistant"
+pnpm exec clasp push
 ```
 
 `.clasp.json` 包含 Google 项目 ID，默认已被 `.gitignore` 忽略。

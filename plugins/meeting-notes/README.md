@@ -12,7 +12,7 @@ This plugin is a Google Workspace add-on template for creating structured meetin
 
 ```powershell
 cd plugins/meeting-notes/appscript
-npx clasp login
-npx clasp create --type standalone --title "Meeting Notes Assistant"
-npx clasp push
+pnpm exec clasp login
+pnpm exec clasp create --type standalone --title "Meeting Notes Assistant"
+pnpm exec clasp push
 ```

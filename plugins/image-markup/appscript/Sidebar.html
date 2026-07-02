@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      html,
+      body,
+      iframe {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        border: 0;
+      }
+
+      body {
+        overflow: hidden;
+        background: #eef1f4;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe
+      allow="clipboard-read; clipboard-write"
+      id="image-markup-sidebar"
+      src="<?= sidebarUrl ?>"
+      title="Image Markup Sidebar"
+    ></iframe>
+    <script>
+      const sidebarFrame = document.getElementById('image-markup-sidebar');
+      const allowedOrigin = new URL('<?= sidebarUrl ?>').origin;
+      const allowedActions = [
+        'listDocsImages',
+        'createDocsImageSession',
+        'createDocsUploadSession',
+        'openPreparedEditor'
+      ];
+
+      window.addEventListener('message', function (event) {
+        if (event.origin !== allowedOrigin) return;
+        const message = event.data || {};
+        if (message.type !== 'image-markup-sidebar-request' || !message.id || allowedActions.indexOf(message.action) === -1) return;
+
+        google.script.run
+          .withSuccessHandler(function (result) {
+            sidebarFrame.contentWindow.postMessage({
+              type: 'image-markup-sidebar-response',
+              id: message.id,
+              ok: true,
+              result: result
+            }, allowedOrigin);
+          })
+          .withFailureHandler(function (error) {
+            sidebarFrame.contentWindow.postMessage({
+              type: 'image-markup-sidebar-response',
+              id: message.id,
+              ok: false,
+              error: error && error.message ? error.message : 'Apps Script request failed.'
+            }, allowedOrigin);
+          })
+          .runImageMarkupSidebarAction(message.action, message.payload || {});
+      });
+    </script>
+  </body>
+</html>

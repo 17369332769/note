@@ -13,7 +13,6 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: "APPS_SCRIPT_WEBAPP_URL is not configured.",
-        payload,
       },
       { status: 503 },
     );
