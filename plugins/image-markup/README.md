@@ -1,6 +1,6 @@
 # Image Markup
 
-Image Markup is a Google Docs add-on for marking image edits and generating clean AI revisions. The CardService sidebar scans the current document or starts a local-upload session, while the image markup canvas opens in an external Next.js editor.
+Image Markup is a Google Docs add-on for marking image edits and generating clean AI revisions. The HtmlService sidebar embeds a Next.js launcher for the selected Docs image or a local-upload session, while the image markup canvas opens in a modal editor.
 
 ## Structure
 
@@ -9,9 +9,9 @@ plugins/image-markup/
   appscript/
     appsscript.json
     Code.js
-    cards.js
+    Dialog.html
+    Sidebar.html
     docs.js
-    drive.js      # unsupported-source compatibility shim; no Drive API calls
     sessions.js
     webapp.js
 app/image-markup/page.tsx
@@ -25,15 +25,15 @@ lib/image-markup/
 
 1. Deploy the Next.js app and set `EDITOR_BASE_URL` in Apps Script script properties to the deployed origin.
 2. Deploy the Apps Script project as a web app if you need the server-side session proxy, and set `APPS_SCRIPT_WEBAPP_URL` in the Next.js environment to that web app URL.
-3. Set `RUNNINGHUB_API_KEY` in the Next.js server environment. Do not store it in Apps Script or browser code.
-4. Configure Cloudflare R2 for signed image upload/download URLs. R2 is the storage path for local uploads, annotated images, revised images, and edit brief JSON.
+3. Set the image generation provider key in the Next.js server environment. Do not store it in Apps Script or browser code.
+4. Configure Cloudflare R2 for image storage. R2 is the storage path for local uploads, annotated images, revised images, and edit brief JSON.
 5. Copy or push `appscript/` into an Apps Script project with `clasp`.
 6. Create a Google Workspace add-on test deployment for Google Docs.
 7. Open the add-on from Docs and test the document-image and local-upload tabs.
 
 The Apps Script manifest intentionally uses narrow scopes: `documents.currentonly`, `script.container.ui`, `script.external_request`, and `script.locale`. It does not request Drive scopes and does not call Drive APIs.
 
-## R2 signed URL configuration
+## R2 storage configuration
 
 Create a private Cloudflare R2 bucket, then create an R2 API token scoped to that bucket with object read/write permissions. Add these variables to the Next.js server environment:
 
@@ -46,22 +46,39 @@ R2_BUCKET=image-markup
 
 The editor backend exposes:
 
-- `POST /api/image-markup/r2/upload-url` with `{ "contentType": "image/png", "filename": "source.png" }`
+- `POST /api/image-markup/r2/upload` with multipart form data containing `file`
 - `POST /api/image-markup/r2/download-url` with `{ "key": "image-markup/2026-07-02/object.png" }`
+- `GET /api/image-markup/r2/object?key=image-markup/.../source.png`
 
-If browser clients call the signed URLs directly, configure bucket CORS:
+If browser clients call the Next.js API routes from another origin, configure the app origin CORS policy accordingly. The browser uploads images through the Next.js API rather than directly to R2.
 
-```json
-[
-  {
-    "AllowedOrigins": ["http://localhost:3000", "https://YOUR_DEPLOYED_ORIGIN"],
-    "AllowedMethods": ["GET", "PUT", "HEAD"],
-    "AllowedHeaders": ["Content-Type"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3600
-  }
-]
+## Image generation configuration
+
+The editor calls `/api/image-markup/ai-revision` from the browser, and that server route calls the configured image provider. API keys must stay in the Next.js server environment.
+
+AI revision requests require the `sessionId` and `sessionToken` created by Apps Script. Before calling the provider, the Next.js route verifies the session through `APPS_SCRIPT_WEBAPP_URL`, so random callers cannot use the public endpoint without a valid editor session.
+
+RunningHub remains supported:
+
+```env
+IMAGE_GENERATION_PROVIDER=runninghub
+RUNNINGHUB_API_KEY=...
+RUNNINGHUB_IMAGE_EDIT_URL=https://www.runninghub.cn/openapi/v2/rhart-image-g-2-official/image-to-image
+RUNNINGHUB_QUERY_URL=https://www.runninghub.cn/openapi/v2/query
 ```
+
+ImgV2 / aiapis can be selected with:
+
+```env
+IMAGE_GENERATION_PROVIDER=imgv2
+IMGV2_API_KEY=...
+IMGV2_IMAGE_GENERATION_URL=https://imgv2.aiapis.help/v1/images/generations
+IMGV2_IMAGE_MODEL=gpt-image-2
+IMGV2_IMAGE_MODEL_CONFIG_KEY=gpt-image-2-[c4k]
+IMGV2_IMAGE_SIZE=4k
+```
+
+For compatibility, `IMAGE_GENERATION_API_KEY`, `IMAGE_GENERATION_MODEL`, `IMAGE_GENERATION_MODEL_CONFIG_KEY`, and `IMAGE_GENERATION_SIZE` are also accepted aliases for the ImgV2 settings.
 
 ## Manual Test Checklist
 

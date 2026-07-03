@@ -35,7 +35,7 @@ function onInstall(event) {
 function showImageMarkupSidebar() {
   const ui = getEditorUi_();
   if (!ui) {
-    throw new Error('请从 Google Docs 打开此插件。');
+    throw new Error('Open Image Markup from Google Docs.');
   }
 
   ui.showSidebar(buildLauncherSidebarHtml_());
@@ -56,7 +56,7 @@ function showImageMarkupDialog() {
 function openImageMarkupEditorDialog(params) {
   const ui = getEditorUi_();
   if (!ui) {
-    throw new Error('请从 Google Docs 打开此插件。');
+    throw new Error('Open Image Markup from Google Docs.');
   }
 
   const html = buildEditorHtml_(Object.assign({ apptype: 'addon' }, params || {}))
@@ -81,11 +81,12 @@ function openDefaultImageMarkupEditorDialog() {
 function openPreparedImageMarkupEditorDialog(sessionId) {
   const session = getSession_(sessionId);
   if (!session) {
-    throw new Error('找不到已上传的图片会话。');
+    throw new Error('This editing session is no longer available. Please choose or upload the image again.');
   }
 
   openImageMarkupEditorDialog({
     sessionId: session.id,
+    sessionToken: session.accessToken,
     sourceLabel: session.source && (session.source.originalFilename || session.source.filename || session.source.label),
     apptype: 'addon',
     localUpload: session.source && session.source.type === 'local-upload' ? 1 : 0
@@ -136,6 +137,7 @@ function buildHostedEditorUrl_(params) {
   query.push('bridge=1');
 
   if (params.sessionId) query.push('sessionId=' + encodeURIComponent(params.sessionId));
+  if (params.sessionToken) query.push('sessionToken=' + encodeURIComponent(params.sessionToken));
   if (params.sourceLabel) query.push('sourceLabel=' + encodeURIComponent(params.sourceLabel));
   if (params.localUpload === '1' || params.localUpload === 1 || params.localUpload === true) {
     query.push('localUpload=1');
@@ -186,30 +188,6 @@ function buildErrorResponse_(error) {
 function getEditorBaseUrl_() {
   const configured = PropertiesService.getScriptProperties().getProperty('EDITOR_BASE_URL');
   return configured || 'https://note-bice-seven.vercel.app';
-}
-
-/**
- * Creates a card navigation action response.
- *
- * @param {CardService.Card} card Card to show.
- * @return {CardService.ActionResponse}
- */
-function navigateToCard_(card) {
-  return CardService.newActionResponseBuilder()
-    .setNavigation(CardService.newNavigation().pushCard(card))
-    .build();
-}
-
-/**
- * Rebuilds the current card.
- *
- * @param {CardService.Card} card Card to update.
- * @return {CardService.ActionResponse}
- */
-function updateCard_(card) {
-  return CardService.newActionResponseBuilder()
-    .setNavigation(CardService.newNavigation().updateCard(card))
-    .build();
 }
 
 /**

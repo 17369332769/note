@@ -7,7 +7,7 @@
 function doGet(event) {
   const params = event && event.parameter ? event.parameter : {};
   if (params.api === 'session' || params.includeImage === '1') {
-    return jsonResponse_(getEditorSessionPayload(params.sessionId, params.includeImage === '1'));
+    return jsonResponse_(getEditorSessionPayload(params.sessionId, params.includeImage === '1', params.sessionToken || params.accessToken));
   }
 
   return buildEditorHtml_(params);
@@ -20,7 +20,7 @@ function doGet(event) {
  * @param {boolean=} includeImage Whether to include the source image data URL.
  * @return {Object}
  */
-function getEditorSessionPayload(sessionId, includeImage) {
+function getEditorSessionPayload(sessionId, includeImage, sessionToken) {
   if (!sessionId) {
     return {
       ok: false,
@@ -31,11 +31,19 @@ function getEditorSessionPayload(sessionId, includeImage) {
   }
 
   const session = getSession_(sessionId);
+  if (session && !validateSessionAccess_(session, sessionToken)) {
+    return {
+      ok: false,
+      error: 'Invalid editing session token.',
+      session: null,
+      originalImage: null
+    };
+  }
   const originalImage = session && includeImage ? buildOriginalImagePayload_(session) : null;
 
   return {
     ok: Boolean(session),
-    session: session,
+    session: sanitizeSessionForEditor_(session),
     originalImage: originalImage
   };
 }
@@ -53,7 +61,7 @@ function doPost(event) {
   } catch (error) {
     return jsonResponse_({
       ok: false,
-      error: error.message || 'Save failed.'
+      error: error.message || 'Could not save the edited image.'
     });
   }
 }
@@ -68,7 +76,7 @@ function doPost(event) {
 function runImageMarkupBridgeAction(action, payload) {
   const body = payload || {};
   if (action === 'getSession') {
-    return getEditorSessionPayload(body.sessionId, body.includeImage === true);
+    return getEditorSessionPayload(body.sessionId, body.includeImage === true, body.sessionToken);
   }
   if (action === 'saveEditorOutput') {
     return saveEditorOutput(body);
@@ -85,11 +93,8 @@ function runImageMarkupBridgeAction(action, payload) {
  */
 function runImageMarkupSidebarAction(action, payload) {
   const body = payload || {};
-  if (action === 'listDocsImages') {
-    return listDocsImagesForSidebar();
-  }
-  if (action === 'createDocsImageSession') {
-    return createDocsImageSessionFromSidebar(body.imageIndex);
+  if (action === 'createDocsSelectedImageSession') {
+    return createDocsSelectedImageSessionFromSidebar();
   }
   if (action === 'createDocsUploadSession') {
     return createDocsUploadSessionFromSidebar(body);
@@ -110,11 +115,14 @@ function runImageMarkupSidebarAction(action, payload) {
 function saveEditorOutput(payload) {
   const session = getSession_(payload.sessionId);
   if (!session) {
-    throw new Error('Annotation session was not found.');
+    throw new Error('This editing session is no longer available. Please start again.');
+  }
+  if (!validateSessionAccess_(session, payload.sessionToken)) {
+    throw new Error('Invalid editing session token.');
   }
 
   if (!payload.annotatedImageR2Key) {
-    throw new Error('Missing annotated image R2 key.');
+    throw new Error('The marked-up image is missing its storage key. Please save again.');
   }
 
   if (session.source && session.source.type === 'local-upload') {
@@ -153,6 +161,33 @@ function saveEditorOutput(payload) {
     ok: true,
     output: output
   };
+}
+
+/**
+ * Checks that a browser request belongs to the prepared editor session.
+ *
+ * @param {Object} session Annotation session.
+ * @param {string=} sessionToken Token from the editor URL.
+ * @return {boolean}
+ */
+function validateSessionAccess_(session, sessionToken) {
+  if (!session || !session.accessToken) return false;
+  return String(sessionToken || '') === String(session.accessToken);
+}
+
+/**
+ * Removes private fields before returning session metadata to callers.
+ *
+ * @param {Object|null} session Annotation session.
+ * @return {Object|null}
+ */
+function sanitizeSessionForEditor_(session) {
+  if (!session) return null;
+  const copy = {};
+  Object.keys(session).forEach(function (key) {
+    if (key !== 'accessToken') copy[key] = session[key];
+  });
+  return copy;
 }
 
 /**
@@ -212,27 +247,4 @@ function buildOriginalImagePayload_(session) {
     mimeType: blob.getContentType(),
     dataUrl: 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes())
   };
-}
-
-/**
- * Builds a card for write-back actions after editor save.
- *
- * @param {Object} event Workspace action event.
- * @return {CardService.ActionResponse}
- */
-function showSessionActions(event) {
-  const session = requireSessionFromEvent_(event);
-  const section = CardService.newCardSection()
-    .addWidget(CardService.newKeyValue().setTopLabel(session.source && session.source.label ? session.source.label : session.id).setContent(session.status));
-
-  if (session.host === 'docs') {
-    section.addWidget(CardService.newTextButton().setText(session.revisedImageR2Key ? '插入修订副本' : '插入标注副本').setOnClickAction(CardService.newAction().setFunctionName('insertIntoDocs').setParameters({ sessionId: session.id })));
-  }
-
-  const card = CardService.newCardBuilder()
-    .setHeader(CardService.newCardHeader().setTitle('会话操作').setSubtitle(ADDON_NAME))
-    .addSection(section)
-    .build();
-
-  return navigateToCard_(card);
 }

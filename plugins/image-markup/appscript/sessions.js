@@ -13,9 +13,11 @@ const SESSION_TTL_HOURS = 24;
 function createSessionForSource_(host, source) {
   const sourceLabel = source.filename || source.label || 'workspace-image';
   const id = Utilities.getUuid();
+  const accessToken = Utilities.getUuid();
   const now = new Date().toISOString();
   const session = {
     id: id,
+    accessToken: accessToken,
     userKey: getAnonymousUserKey_(),
     host: host,
     source: source,
@@ -25,6 +27,7 @@ function createSessionForSource_(host, source) {
     expiresAt: new Date(Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000).toISOString(),
     editorUrl: buildHostedEditorUrl_({
       sessionId: id,
+      sessionToken: accessToken,
       sourceLabel: sourceLabel,
       apptype: getPluginAppTypeForHost_(host),
       localUpload: source.type === 'local-upload' ? 1 : 0
@@ -44,9 +47,9 @@ function createSessionForSource_(host, source) {
  */
 function getSourceImageBlob_(host, source) {
   if (source.type === 'docs-inline-image') return getDocsImageBlob_(source);
-  if (source.type === 'local-upload') throw new Error('Local uploads are saved after the editor uploads an image.');
+  if (source.type === 'local-upload') throw new Error('Upload the image in the editor before saving.');
   if (host === 'docs') return getDocsImageBlob_(source);
-  throw new Error('当前版本只支持 Google Docs 中的图片。');
+  throw new Error('Image Markup currently supports Google Docs images only.');
 }
 
 /**
@@ -152,7 +155,7 @@ function requireSessionFromEvent_(event) {
   const parameters = event && event.parameters ? event.parameters : {};
   const session = getSession_(parameters.sessionId);
   if (!session) {
-    throw new Error('找不到标注会话。');
+    throw new Error('This editing session is no longer available. Please start again.');
   }
   return session;
 }

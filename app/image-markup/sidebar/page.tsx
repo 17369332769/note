@@ -1,16 +1,20 @@
 "use client";
 
-import { Upload as AntUpload } from "antd";
-import { Image as ImageIcon, UploadCloud } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Button, ConfigProvider, Radio, Tabs, Upload as AntUpload } from "antd";
+import { UploadCloud } from "lucide-react";
+import { useState } from "react";
 import styles from "../ImageMarkup.module.css";
 
 type SourceTab = "document" | "upload";
-type SidebarAction = "listDocsImages" | "createDocsImageSession" | "createDocsUploadSession" | "openPreparedEditor";
+type SidebarAction =
+  | "createDocsSelectedImageSession"
+  | "createDocsUploadSession"
+  | "openPreparedEditor";
 type DocsImage = {
   label?: string;
   width?: number;
   height?: number;
+  previewDataUrl?: string;
 };
 type R2UploadUrlResponse = {
   ok?: boolean;
@@ -66,7 +70,7 @@ async function uploadFileToR2(file: File, prefix: string) {
   });
   const result = (await response.json().catch(() => ({}))) as R2UploadUrlResponse;
   if (!response.ok || !result.ok || !result.key) {
-    throw new Error(result.error || "图片上传失败，请重试。");
+    throw new Error(result.error || "The image could not be uploaded. Please try again.");
   }
 
   return result.key;
@@ -74,21 +78,18 @@ async function uploadFileToR2(file: File, prefix: string) {
 
 export default function ImageMarkupSidebarPage() {
   const [activeTab, setActiveTab] = useState<SourceTab>("document");
-  const [docsImages, setDocsImages] = useState<DocsImage[]>([]);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number>();
+  const [selectedPreview, setSelectedPreview] = useState<DocsImage>();
   const [documentSessionId, setDocumentSessionId] = useState("");
   const [uploadSessionId, setUploadSessionId] = useState("");
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState("");
-  const [status, setStatus] = useState("从当前文档中选择一张图片。");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [selectingDocumentImage, setSelectingDocumentImage] = useState(false);
+  const [openingEditor, setOpeningEditor] = useState(false);
   const openSessionId = activeTab === "document" ? documentSessionId : uploadSessionId;
 
-  const statusText = useMemo(() => error || status, [error, status]);
-
-  function showStatus(message: string) {
+  function clearError() {
     setError("");
-    setStatus(message);
   }
 
   function showError(message: string) {
@@ -98,48 +99,30 @@ export default function ImageMarkupSidebarPage() {
   function selectSourceTab(tab: SourceTab) {
     setActiveTab(tab);
     if (tab === "document") {
-      showStatus(documentSessionId ? "文档图片已准备好，可以打开大画布。" : "从当前文档中选择一张图片。");
+      clearError();
       return;
     }
 
-    showStatus(uploadSessionId ? "图片已准备好，可以打开大画布。" : "上传一张 PNG、JPEG 或 WebP 图片。");
+    clearError();
   }
 
-  async function loadDocsImages() {
+  async function chooseSelectedDocsImage() {
     setBusy(true);
-    setDocsImages([]);
-    setSelectedImageIndex(undefined);
+    setSelectingDocumentImage(true);
+    setSelectedPreview(undefined);
     setDocumentSessionId("");
-    showStatus("正在读取文档图片...");
+    clearError();
 
     try {
-      const result = await callSidebarBridge<{ images?: DocsImage[] }>("listDocsImages");
-      const images = result.images || [];
-      setDocsImages(images);
-      showStatus(images.length ? "请选择一张文档图片。" : "当前文档中没有找到图片。");
-      if (!images.length) showError("当前文档中没有找到图片。");
-    } catch (caught) {
-      showError(caught instanceof Error ? caught.message : "读取失败，请重试。");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function chooseDocsImage(index: number) {
-    setBusy(true);
-    setSelectedImageIndex(index);
-    setDocumentSessionId("");
-    showStatus("正在准备文档图片...");
-
-    try {
-      const result = await callSidebarBridge<{ sessionId?: string }>("createDocsImageSession", { imageIndex: index });
-      if (!result.sessionId) throw new Error("图片准备失败，请重试。");
+      const result = await callSidebarBridge<{ sessionId?: string; image?: DocsImage }>("createDocsSelectedImageSession");
+      if (!result.sessionId) throw new Error("Select an inline image in the document, then try again.");
       setDocumentSessionId(result.sessionId);
-      showStatus("文档图片已准备好，可以打开大画布。");
+      setSelectedPreview(result.image);
     } catch (caught) {
-      showError(caught instanceof Error ? caught.message : "图片准备失败，请重试。");
+      showError(caught instanceof Error ? caught.message : "Select an inline image in the document, then try again.");
     } finally {
       setBusy(false);
+      setSelectingDocumentImage(false);
     }
   }
 
@@ -148,13 +131,13 @@ export default function ImageMarkupSidebarPage() {
     setUploadPreviewUrl("");
 
     if (!supportedTypes.includes(file.type)) {
-      showError("仅支持 PNG、JPEG 或 WebP 图片。");
+      showError("Use a PNG, JPEG, or WebP image.");
       return;
     }
 
     setUploadPreviewUrl(URL.createObjectURL(file));
     setBusy(true);
-    showStatus("正在上传图片...");
+    clearError();
 
     try {
       const r2Key = await uploadFileToR2(file, "image-markup/source");
@@ -164,104 +147,103 @@ export default function ImageMarkupSidebarPage() {
         r2Key,
         size: file.size,
       });
-      if (!result.sessionId) throw new Error("图片准备失败，请重试。");
+      if (!result.sessionId) throw new Error("Could not get this image ready for editing. Please try again.");
       setUploadSessionId(result.sessionId);
-      showStatus("图片已准备好，可以打开大画布。");
     } catch (caught) {
-      showError(caught instanceof Error ? caught.message : "图片准备失败，请重试。");
+      showError(caught instanceof Error ? caught.message : "Could not get this image ready for editing. Please try again.");
     } finally {
       setBusy(false);
     }
   }
 
   async function openPreparedEditor() {
+    if (activeTab === "document" && !documentSessionId) {
+      await chooseSelectedDocsImage();
+      return;
+    }
     if (!openSessionId) return;
     setBusy(true);
-    showStatus("正在打开编辑器...");
+    setOpeningEditor(true);
+    clearError();
 
     try {
       await callSidebarBridge("openPreparedEditor", { sessionId: openSessionId });
-      showStatus("编辑器已打开。");
     } catch (caught) {
-      showError(caught instanceof Error ? caught.message : "打开失败，请重试。");
+      showError(caught instanceof Error ? caught.message : "Could not start editing. Please try again.");
     } finally {
       setBusy(false);
+      setOpeningEditor(false);
     }
   }
 
   return (
-    <main className={styles.workspaceSidebarShell}>
-      <div>
-        <p className="eyebrow">Image Markup</p>
-        <h1>选择图片</h1>
+    <ConfigProvider theme={{ token: { colorPrimary: "#2563eb" } }}>
+      <main className={styles.workspaceSidebarShell}>
+      <Tabs
+        activeKey={activeTab}
+        className={styles.sourceTabs}
+        items={[
+          { key: "document", label: "Document" },
+          { key: "upload", label: "Upload" },
+        ]}
+        onChange={(key) => selectSourceTab(key as SourceTab)}
+      />
+
+      <div className={styles.sidebarContent}>
+        {activeTab === "document" ? (
+          <section className={styles.uploadPanel}>
+            <div className={styles.sourceState}>
+              <Radio checked className={styles.sourceStateRadio} tabIndex={-1}>
+                {documentSessionId ? "Image ready. Edit to mark your changes." : "Select an image in this Doc, then use it here."}
+              </Radio>
+            </div>
+            {selectedPreview?.previewDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img alt="Selected document image preview" className={styles.sidebarPreview} src={selectedPreview.previewDataUrl} />
+            ) : null}
+          </section>
+        ) : (
+          <section className={styles.uploadPanel}>
+            <AntUpload.Dragger
+              accept="image/png,image/jpeg,image/webp"
+              beforeUpload={(file) => {
+                void handleUpload(file);
+                return false;
+              }}
+              className={styles.sidebarUpload}
+              disabled={busy}
+              maxCount={1}
+              showUploadList={false}
+            >
+              <div className={styles.sidebarUploadContent}>
+                <UploadCloud aria-hidden="true" size={20} />
+                <strong>{busy ? "Uploading image..." : "Choose image file"}</strong>
+                <span>PNG, JPEG, or WebP</span>
+              </div>
+            </AntUpload.Dragger>
+            {uploadPreviewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img alt="Selected image preview" className={styles.sidebarPreview} src={uploadPreviewUrl} />
+            ) : null}
+          </section>
+        )}
       </div>
 
-      <div className={styles.sourceTabs} aria-label="Image source">
-        <button aria-pressed={activeTab === "document"} onClick={() => selectSourceTab("document")} type="button">
-          文档图片
-        </button>
-        <button aria-pressed={activeTab === "upload"} onClick={() => selectSourceTab("upload")} type="button">
-          本地上传
-        </button>
+      <div className={styles.sidebarFooter}>
+        <Button
+          block
+          className={styles.editorSave}
+          disabled={(activeTab === "upload" && !openSessionId) || (busy && !selectingDocumentImage && !openingEditor)}
+          loading={selectingDocumentImage || openingEditor}
+          onClick={openPreparedEditor}
+          type="primary"
+        >
+          {activeTab === "document" && !documentSessionId ? "Select image" : "Edit"}
+        </Button>
+
+        {error ? <p className={styles.editorStatus}>{error}</p> : null}
       </div>
-
-      {activeTab === "document" ? (
-        <section className={styles.uploadPanel}>
-          <button className="button" disabled={busy} onClick={loadDocsImages} type="button">
-            <ImageIcon size={18} />
-            选择文档中的图片
-          </button>
-          {docsImages.length ? (
-            <div className={styles.sidebarImageList}>
-              {docsImages.map((image, index) => (
-                <button
-                  aria-pressed={selectedImageIndex === index}
-                  className={styles.sidebarImageOption}
-                  disabled={busy}
-                  key={`${image.label || "image"}-${index}`}
-                  onClick={() => chooseDocsImage(index)}
-                  type="button"
-                >
-                  <strong>{image.label || `文档图片 ${index + 1}`}</strong>
-                  <span>{image.width && image.height ? `${image.width} x ${image.height}` : "可标注"}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </section>
-      ) : (
-        <section className={styles.uploadPanel}>
-          <AntUpload.Dragger
-            accept="image/png,image/jpeg,image/webp"
-            beforeUpload={(file) => {
-              void handleUpload(file);
-              return false;
-            }}
-            className={styles.sidebarUpload}
-            disabled={busy}
-            maxCount={1}
-            showUploadList={false}
-          >
-            <div className={styles.sidebarUploadContent}>
-              <UploadCloud aria-hidden="true" size={20} />
-              <strong>{busy ? "正在上传图片..." : "上传本地图片"}</strong>
-              <span>PNG、JPEG 或 WebP</span>
-            </div>
-          </AntUpload.Dragger>
-          {uploadPreviewUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img alt="Selected image preview" className={styles.sidebarPreview} src={uploadPreviewUrl} />
-          ) : null}
-        </section>
-      )}
-
-      {openSessionId ? (
-        <button className={`button button--primary ${styles.editorSave}`} disabled={busy} onClick={openPreparedEditor} type="button">
-          打开大画布
-        </button>
-      ) : null}
-
-      <p className={error ? styles.editorStatus : styles.sidebarStatus}>{statusText}</p>
-    </main>
+      </main>
+    </ConfigProvider>
   );
 }

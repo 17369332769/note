@@ -1,16 +1,15 @@
 "use client";
 
+import { Button, ConfigProvider, Slider, Tooltip, Upload as AntUpload } from "antd";
+import type { UploadProps } from "antd";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import {
   ArrowUpRight,
   Download,
-  Image as ImageIcon,
-  Loader2,
   MousePointer2,
   Pencil,
   Redo2,
-  Save,
   Square,
   Type,
   Undo2,
@@ -25,7 +24,7 @@ import {
   hitTestAnnotation,
   moveAnnotation,
 } from "@/lib/image-markup/export";
-import type { AiRevisionMetadata, AiRevisionResponse, Annotation, AnnotationTool, Point } from "@/lib/image-markup/types";
+import type { AiRevisionResponse, Annotation, AnnotationTool, Point } from "@/lib/image-markup/types";
 import styles from "./ImageMarkup.module.css";
 
 const defaultAnnotationColor = "#d93025";
@@ -41,7 +40,7 @@ const versionGap = 40;
 type PluginAppType = "addon" | "drive";
 type SourceTab = "document" | "upload";
 type SelectionTarget = "image" | "annotation";
-type BridgeAction = "getSession" | "saveEditorOutput";
+type BridgeAction = "getSession";
 
 type AnnotationHistory = {
   annotations: Annotation[];
@@ -77,11 +76,6 @@ type R2DownloadUrlResponse = {
   downloadUrl?: string;
 };
 
-type SaveResponse = {
-  ok?: boolean;
-  error?: string;
-};
-
 function isTextEntryElement(element: Element | null) {
   if (!element) return false;
   const tagName = element.tagName.toLowerCase();
@@ -113,7 +107,7 @@ function parseAiRevisionResponse(text: string): AiRevisionResponse {
     return JSON.parse(text) as AiRevisionResponse;
   } catch {
     const message = text.trim().slice(0, 200);
-    return { ok: false, error: message || "AI revision failed." };
+    return { ok: false, error: message || "The clean revision could not be generated." };
   }
 }
 
@@ -226,8 +220,7 @@ function getFrameAtPoint(frames: VersionFrame[], point: Point) {
 export default function WorkspaceImageEditorPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasFrameRef = useRef<HTMLDivElement | null>(null);
-  const canvasStageRef = useRef<HTMLElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const canvasStageRef = useRef<HTMLDivElement | null>(null);
   const textEditorRef = useRef<HTMLInputElement | null>(null);
   const imageElementsRef = useRef<Record<string, HTMLImageElement>>({});
   const dragRef = useRef<{ mode: "draw" | "move" | "move-image"; start: Point; selectedId?: string; versionId: string } | null>(null);
@@ -241,6 +234,7 @@ export default function WorkspaceImageEditorPage() {
   }, []);
 
   const sessionId = params.get("sessionId") || "local-session";
+  const sessionToken = params.get("sessionToken") || "";
   const sourceLabel = params.get("sourceLabel") || "Workspace image";
   const localUpload = params.get("localUpload") === "1";
   const bridgeEnabled = params.get("bridge") === "1";
@@ -255,13 +249,10 @@ export default function WorkspaceImageEditorPage() {
   const [selectionTarget, setSelectionTarget] = useState<SelectionTarget>();
   const [editingTextId, setEditingTextId] = useState<string>();
   const [textEditFocusKey, setTextEditFocusKey] = useState(0);
-  const [saveState, setSaveState] = useState<"idle" | "saving-annotated" | "saving-revised" | "saved-annotated" | "saved-revised" | "failed">("idle");
   const [sourceTab] = useState<SourceTab>(localUpload ? "upload" : "document");
   const [revisionState, setRevisionState] = useState<"idle" | "generating" | "ready" | "failed">("idle");
   const [revisionError, setRevisionError] = useState("");
-  const [revisedImageUrl, setRevisedImageUrl] = useState("");
-  const [aiRevision, setAiRevision] = useState<AiRevisionMetadata>();
-  const [localFileMeta, setLocalFileMeta] = useState<{ name: string; type: string }>();
+  const [sourceLoadError, setSourceLoadError] = useState("");
   const [contentScale, setContentScale] = useState(defaultContentScale);
   const [canvasLayout, setCanvasLayout] = useState<{
     left: number;
@@ -317,15 +308,14 @@ export default function WorkspaceImageEditorPage() {
   const setInitialImage = useCallback((url: string) => {
     const id = createVersionId();
     imageElementsRef.current = {};
-    setVersions([{ id, label: "原图", url, width: 0, height: 0, offset: { x: 0, y: 0 } }]);
+    setVersions([{ id, label: "Original", url, width: 0, height: 0, offset: { x: 0, y: 0 } }]);
     setHistories({ [id]: createEmptyHistory() });
     setActiveVersionId(id);
     setSelectedId(undefined);
     setSelectionTarget(undefined);
     setEditingTextId(undefined);
-    setRevisedImageUrl("");
-    setAiRevision(undefined);
     setRevisionState("idle");
+    setSourceLoadError("");
     setContentScale(defaultContentScale);
   }, []);
 
@@ -434,6 +424,39 @@ export default function WorkspaceImageEditorPage() {
     renderCanvasRef.current = renderCanvas;
   }, [renderCanvas]);
 
+  const callAppsScriptBridge = useCallback(<T,>(action: BridgeAction, payload: unknown) => {
+    return new Promise<T>((resolve, reject) => {
+      const requestId = createVersionId();
+      const timeout = window.setTimeout(() => {
+        window.removeEventListener("message", handleMessage);
+        reject(new Error("Apps Script bridge timed out."));
+      }, 60000);
+
+      function handleMessage(event: MessageEvent) {
+        const message = event.data;
+        if (!message || message.type !== "image-markup-response" || message.id !== requestId) return;
+        window.clearTimeout(timeout);
+        window.removeEventListener("message", handleMessage);
+        if (message.ok) {
+          resolve(message.result as T);
+        } else {
+          reject(new Error(message.error || "Apps Script bridge request failed."));
+        }
+      }
+
+      window.addEventListener("message", handleMessage);
+      window.parent.postMessage(
+        {
+          type: "image-markup-request",
+          id: requestId,
+          action,
+          payload,
+        },
+        "*",
+      );
+    });
+  }, []);
+
   useEffect(() => {
     versions.forEach((version) => {
       if (imageElementsRef.current[version.id]) return;
@@ -464,28 +487,43 @@ export default function WorkspaceImageEditorPage() {
 
     let cancelled = false;
     const sessionRequest = bridgeEnabled
-      ? callAppsScriptBridge<{ originalImage?: { dataUrl?: string; r2Key?: string } }>("getSession", { sessionId, includeImage: true })
-      : fetch(`/api/image-markup/session?sessionId=${encodeURIComponent(sessionId)}`).then((response) => (response.ok ? response.json() : null));
+      ? callAppsScriptBridge<{ ok?: boolean; error?: string; originalImage?: { dataUrl?: string; r2Key?: string } }>("getSession", {
+          sessionId,
+          sessionToken,
+          includeImage: true,
+        })
+      : fetch(
+          `/api/image-markup/session?sessionId=${encodeURIComponent(sessionId)}&sessionToken=${encodeURIComponent(sessionToken)}`,
+        ).then((response) => (response.ok ? response.json() : null));
 
     sessionRequest
       .then(async (data) => {
         if (cancelled) return;
+        if (data?.ok === false) {
+          setSourceLoadError(data.error || "Could not load this editing session.");
+          return;
+        }
         if (data?.originalImage?.dataUrl) {
           setInitialImage(data.originalImage.dataUrl);
           return;
         }
         if (data?.originalImage?.r2Key) {
           setInitialImage(getR2ObjectUrl(data.originalImage.r2Key));
+          return;
         }
+        setSourceLoadError("Could not load the selected image. Select it again from the sidebar.");
       })
-      .catch(() => {
-        if (!cancelled) setVersions([]);
+      .catch((error) => {
+        if (!cancelled) {
+          setVersions([]);
+          setSourceLoadError(error instanceof Error ? error.message : "Could not load the selected image.");
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [bridgeEnabled, sessionId, setInitialImage]);
+  }, [bridgeEnabled, callAppsScriptBridge, sessionId, sessionToken, setInitialImage]);
 
   useLayoutEffect(() => {
     renderCanvas();
@@ -771,18 +809,16 @@ export default function WorkspaceImageEditorPage() {
     if (!dataUrl) return;
     const anchor = document.createElement("a");
     anchor.href = dataUrl;
-    anchor.download = `${activeVersion?.label || sourceLabel}-annotated.png`;
+    anchor.download = `${activeVersion?.label || sourceLabel}-marked-up.png`;
     anchor.click();
   }
 
-  function chooseLocalImage(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  function chooseLocalImage(file: File) {
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-      setSaveState("failed");
+      setRevisionError("Only PNG, JPEG, or WebP images are supported.");
+      setRevisionState("failed");
       return;
     }
-    setLocalFileMeta({ name: file.name, type: file.type });
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -821,39 +857,6 @@ export default function WorkspaceImageEditorPage() {
     });
   }
 
-  function callAppsScriptBridge<T>(action: BridgeAction, payload: unknown) {
-    return new Promise<T>((resolve, reject) => {
-      const requestId = createVersionId();
-      const timeout = window.setTimeout(() => {
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Apps Script bridge timed out."));
-      }, 60000);
-
-      function handleMessage(event: MessageEvent) {
-        const message = event.data;
-        if (!message || message.type !== "image-markup-response" || message.id !== requestId) return;
-        window.clearTimeout(timeout);
-        window.removeEventListener("message", handleMessage);
-        if (message.ok) {
-          resolve(message.result as T);
-        } else {
-          reject(new Error(message.error || "Apps Script bridge request failed."));
-        }
-      }
-
-      window.addEventListener("message", handleMessage);
-      window.parent.postMessage(
-        {
-          type: "image-markup-request",
-          id: requestId,
-          action,
-          payload,
-        },
-        "*",
-      );
-    });
-  }
-
   async function getActiveImageDataUrl() {
     if (!activeVersion) return "";
     if (activeVersion.url.startsWith("data:")) return activeVersion.url;
@@ -868,7 +871,7 @@ export default function WorkspaceImageEditorPage() {
     });
     const result = (await response.json().catch(() => ({}))) as R2DownloadUrlResponse;
     if (!response.ok || !result.ok || !result.downloadUrl) {
-      throw new Error(result.error || "图片下载地址创建失败。");
+      throw new Error(result.error || "Could not prepare the image for download.");
     }
     return result.downloadUrl;
   }
@@ -892,7 +895,7 @@ export default function WorkspaceImageEditorPage() {
     });
     const result = (await response.json().catch(() => ({}))) as R2UploadUrlResponse;
     if (!response.ok || !result.ok || !result.key) {
-      throw new Error(result.error || "图片上传失败，请重试。");
+      throw new Error(result.error || "The image could not be uploaded. Please try again.");
     }
 
     return result.key;
@@ -900,10 +903,6 @@ export default function WorkspaceImageEditorPage() {
 
   async function uploadDataUrlToR2(dataUrl: string, filename: string, prefix: string) {
     return uploadBlobToR2(await dataUrlToBlob(dataUrl), filename, prefix);
-  }
-
-  async function uploadJsonToR2(value: unknown, filename: string, prefix: string) {
-    return uploadBlobToR2(new Blob([JSON.stringify(value, null, 2)], { type: "application/json" }), filename, prefix);
   }
 
   async function prepareRunningHubImagesWithR2(originalImageDataUrl: string, annotatedImageDataUrl: string) {
@@ -914,34 +913,9 @@ export default function WorkspaceImageEditorPage() {
     return Promise.all([getR2DownloadUrl(originalKey), getR2DownloadUrl(annotatedKey)]) as Promise<[string, string]>;
   }
 
-  async function uploadEditorOutputsToR2(payload: {
-    annotatedPngDataUrl: string;
-    revisedPngDataUrl?: string;
-    originalImageDataUrl?: string;
-    editBrief: unknown;
-  }) {
-    const [annotatedImageR2Key, revisedImageR2Key, originalImageR2Key, editBriefR2Key] = await Promise.all([
-      uploadDataUrlToR2(payload.annotatedPngDataUrl, `${sessionId}-annotated.png`, "image-markup/output"),
-      payload.revisedPngDataUrl
-        ? uploadDataUrlToR2(payload.revisedPngDataUrl, `${sessionId}-revised.png`, "image-markup/output")
-        : Promise.resolve(undefined),
-      payload.originalImageDataUrl
-        ? uploadDataUrlToR2(payload.originalImageDataUrl, `${sessionId}-original.png`, "image-markup/source")
-        : Promise.resolve(undefined),
-      uploadJsonToR2(payload.editBrief, `${sessionId}-edit-brief.json`, "image-markup/output"),
-    ]);
-
-    return {
-      annotatedImageR2Key,
-      revisedImageR2Key,
-      originalImageR2Key,
-      editBriefR2Key,
-    };
-  }
-
   async function generateRevision() {
     if (!activeVersion) {
-      setRevisionError("请先选择一张图片。");
+      setRevisionError("Choose an image before generating a revision.");
       setRevisionState("failed");
       return;
     }
@@ -960,6 +934,7 @@ export default function WorkspaceImageEditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId,
+          sessionToken,
           preparedImageUrls,
           editBrief: brief,
           aspectRatio: getAspectRatio(activeVersion),
@@ -968,22 +943,13 @@ export default function WorkspaceImageEditorPage() {
       const responseText = await response.text();
       const result = parseAiRevisionResponse(responseText);
       if (!response.ok || !result.ok) {
-        throw new Error(result.ok ? "AI revision failed." : result.error);
+        throw new Error(result.ok ? "The clean revision could not be generated." : result.error);
       }
 
-      const metadata: AiRevisionMetadata = {
-        provider: result.provider,
-        taskId: result.taskId,
-        promptVersion: result.promptVersion,
-        promptHash: result.promptHash,
-        resolution: result.resolution,
-        quality: result.quality,
-        generatedAt: result.generatedAt,
-      };
       const nextId = createVersionId();
       const nextVersion: ImageVersion = {
         id: nextId,
-        label: `修订图 ${versions.length}`,
+        label: `Revision ${versions.length}`,
         url: result.revisedImageDataUrl,
         width: activeVersion.width,
         height: activeVersion.height,
@@ -995,74 +961,31 @@ export default function WorkspaceImageEditorPage() {
       setSelectedId(undefined);
       setSelectionTarget("image");
       setEditingTextId(undefined);
-      setRevisedImageUrl(result.revisedImageDataUrl);
-      setAiRevision(metadata);
       setRevisionState("ready");
     } catch (error) {
-      setRevisionError(error instanceof Error ? error.message : "生成修订图失败，请重试。");
+      setRevisionError(error instanceof Error ? error.message : "Could not create a clean revision. Please review the marks and try again.");
       setRevisionState("failed");
-    }
-  }
-
-  async function saveToWorkspace(mode: "annotated" | "revised") {
-    if (!activeVersion) return;
-    if (mode === "revised" && !revisedImageUrl) {
-      setSaveState("failed");
-      return;
-    }
-
-    renderCanvas();
-    setSaveState(mode === "revised" ? "saving-revised" : "saving-annotated");
-    const brief = buildEditBrief(sessionId, activeVersion.label, "", annotations, contentScale);
-
-    try {
-      const annotatedPngDataUrl = getActiveAnnotatedPngDataUrl();
-      const revisedPngDataUrl = mode === "revised" ? await imageUrlToPngDataUrl(versions[versions.length - 1]?.url || activeVersion.url) : undefined;
-      const firstVersion = versions[0];
-      const r2Outputs = await uploadEditorOutputsToR2({
-        annotatedPngDataUrl,
-        revisedPngDataUrl,
-        originalImageDataUrl: sourceTab === "upload" && firstVersion?.url.startsWith("data:") ? firstVersion.url : undefined,
-        editBrief: brief,
-      });
-      const savePayload = {
-        sessionId,
-        originalFilename: sourceTab === "upload" ? localFileMeta?.name : undefined,
-        originalMimeType: sourceTab === "upload" ? localFileMeta?.type : undefined,
-        annotatedImageR2Key: r2Outputs.annotatedImageR2Key,
-        revisedImageR2Key: r2Outputs.revisedImageR2Key,
-        originalImageR2Key: r2Outputs.originalImageR2Key,
-        editBriefR2Key: r2Outputs.editBriefR2Key,
-        editBrief: brief,
-        aiRevision: mode === "revised" ? aiRevision : undefined,
-      };
-      const result = bridgeEnabled
-        ? await callAppsScriptBridge<SaveResponse>("saveEditorOutput", savePayload)
-        : await fetch("/api/image-markup/save", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(savePayload),
-          }).then(async (response) => {
-            const json = (await response.json().catch(() => ({}))) as SaveResponse;
-            if (!response.ok) throw new Error(json.error || "保存失败");
-            return json;
-          });
-
-      if (result.ok === false) throw new Error(result.error || "保存失败");
-      setSaveState(mode === "revised" ? "saved-revised" : "saved-annotated");
-    } catch {
-      setSaveState("failed");
     }
   }
 
   const toolButtons = [
     { id: "select" as const, label: "Select", icon: MousePointer2 },
-    { id: "freehand" as const, label: "Draw", icon: Pencil },
+    { id: "freehand" as const, label: "Freehand", icon: Pencil },
     { id: "arrow" as const, label: "Arrow", icon: ArrowUpRight },
-    { id: "rectangle" as const, label: "Box", icon: Square },
-    { id: "text" as const, label: "Text", icon: Type },
+    { id: "rectangle" as const, label: "Box highlight", icon: Square },
+    { id: "text" as const, label: "Note", icon: Type },
   ];
   const showEditorUploadPicker = sourceTab === "upload" && !versions.length;
+  const editorUploadProps: UploadProps = {
+    accept: "image/png,image/jpeg,image/webp",
+    beforeUpload: (file) => {
+      chooseLocalImage(file);
+      return false;
+    },
+    disabled: Boolean(versions.length),
+    maxCount: 1,
+    showUploadList: false,
+  };
 
   let textEditorStyle: CSSProperties | undefined;
   if (editingTextAnnotation && canvasLayout && activeVersion) {
@@ -1091,20 +1014,19 @@ export default function WorkspaceImageEditorPage() {
   }
 
   return (
-    <main
-      className={styles.editorShell}
-      data-apptype={appType}
-      data-plugin-environment={appType}
-      data-plugin-style-environment={styleEnvironment}
-    >
+    <ConfigProvider theme={{ token: { colorPrimary: "#2563eb" } }}>
+      <main
+        className={styles.editorShell}
+        data-apptype={appType}
+        data-plugin-environment={appType}
+        data-plugin-style-environment={styleEnvironment}
+      >
       <aside className={styles.editorSidebar}>
         {showEditorUploadPicker ? (
           <div className={styles.uploadPanel}>
-            <input accept="image/png,image/jpeg,image/webp" hidden onChange={chooseLocalImage} ref={fileInputRef} type="file" />
-            <button className="button" onClick={() => fileInputRef.current?.click()} type="button">
-              <Upload size={18} />
-              选择图片
-            </button>
+            <AntUpload {...editorUploadProps}>
+              <Button icon={<Upload size={18} />}>Upload image</Button>
+            </AntUpload>
           </div>
         ) : null}
 
@@ -1112,104 +1034,100 @@ export default function WorkspaceImageEditorPage() {
           {toolButtons.map((item) => {
             const Icon = item.icon;
             return (
-              <button
-                aria-pressed={tool === item.id}
-                className={styles.iconButton}
-                key={item.id}
-                onClick={() => {
-                  setTool(item.id);
-                  if (item.id !== "text") {
-                    setEditingTextId(undefined);
-                  }
-                }}
-                title={item.label}
-                type="button"
-              >
-                <Icon size={18} />
-              </button>
+              <Tooltip key={item.id} title={item.label}>
+                <Button
+                  aria-pressed={tool === item.id}
+                  icon={<Icon size={18} />}
+                  onClick={() => {
+                    setTool(item.id);
+                    if (item.id !== "text") {
+                      setEditingTextId(undefined);
+                    }
+                  }}
+                  type={tool === item.id ? "primary" : "default"}
+                />
+              </Tooltip>
             );
           })}
         </div>
 
         <div className={styles.toolGroup}>
-          <button className={styles.iconButton} disabled={!annotations.length} onClick={undo} title="Undo (Ctrl+Z)" type="button">
-            <Undo2 size={18} />
-          </button>
-          <button className={styles.iconButton} disabled={!redoStack.length} onClick={redo} title="Redo (Ctrl+Shift+Z)" type="button">
-            <Redo2 size={18} />
-          </button>
-          <button className={styles.iconButton} disabled={!activeVersion} onClick={exportPng} title="Download PNG" type="button">
-            <Download size={18} />
-          </button>
+          <Tooltip title="Undo (Ctrl+Z)">
+            <Button disabled={!annotations.length} icon={<Undo2 size={18} />} onClick={undo} />
+          </Tooltip>
+          <Tooltip title="Redo (Ctrl+Shift+Z)">
+            <Button disabled={!redoStack.length} icon={<Redo2 size={18} />} onClick={redo} />
+          </Tooltip>
+          <Tooltip title="Download PNG">
+            <Button disabled={!activeVersion} icon={<Download size={18} />} onClick={exportPng} />
+          </Tooltip>
         </div>
 
-        <label className={styles.field}>
-          <span>内容缩放 {Math.round(contentScale * 100)}%</span>
-          <input
+        <div className={styles.zoomControl}>
+          <span>Zoom {Math.round(contentScale * 100)}%</span>
+          <Slider
             disabled={!versions.length}
-            max={String(maxContentScale * 100)}
-            min={String(minContentScale * 100)}
-            onChange={(event) => {
-              applyContentScale(Number(event.target.value) / 100);
-            }}
-            step="5"
-            type="range"
+            max={maxContentScale * 100}
+            min={minContentScale * 100}
+            onChange={(value) => applyContentScale(value / 100)}
+            step={5}
+            tooltip={{ formatter: (value) => `${value}%` }}
             value={Math.round(contentScale * 100)}
           />
-        </label>
+        </div>
 
-        <button className="button" disabled={!activeVersion || revisionState === "generating"} onClick={generateRevision} type="button">
-          {revisionState === "generating" ? <Loader2 className={styles.spin} size={18} /> : <ImageIcon size={18} />}
-          {revisionState === "generating" ? "生成中" : revisionState === "failed" ? "重试生成修订图" : "生成修订图"}
-        </button>
+        <Button
+          className={styles.editorSave}
+          disabled={!activeVersion}
+          loading={revisionState === "generating"}
+          onClick={generateRevision}
+          type="primary"
+        >
+          {revisionState === "generating" ? "Generating" : revisionState === "failed" ? "Retry generate" : "Generate"}
+        </Button>
 
         {revisionState === "failed" ? <p className={styles.editorStatus}>{revisionError}</p> : null}
-
-        <button className={`button ${styles.editorSave}`} disabled={!activeVersion || saveState === "saving-annotated" || saveState === "saving-revised"} onClick={() => saveToWorkspace("annotated")} type="button">
-          <Save size={18} />
-          {saveState === "saving-annotated" ? "保存中" : saveState === "saved-annotated" ? "已保存标注图" : "仅保存标注图"}
-        </button>
-
-        <button className={`button button--primary ${styles.editorSave}`} disabled={!revisedImageUrl || saveState === "saving-annotated" || saveState === "saving-revised"} onClick={() => saveToWorkspace("revised")} type="button">
-          <Save size={18} />
-          {saveState === "saving-revised" ? "保存中" : saveState === "saved-revised" ? "已保存修订图" : "保存修订图"}
-        </button>
-
-        {saveState === "failed" ? <p className={styles.editorStatus}>保存失败，请检查 Workspace 回调配置后重试。本地下载仍可使用。</p> : null}
       </aside>
 
-      <section className={styles.canvasStage} ref={canvasStageRef}>
-        {!versions.length ? <p className={styles.canvasEmptyNote}>请选择图片后开始标注。</p> : null}
-        <div className={styles.canvasFrame} ref={canvasFrameRef}>
-          <canvas
-            aria-label="Annotation canvas"
-            className={styles.annotationCanvas}
-            onPointerCancel={endPointer}
-            onPointerDown={beginPointer}
-            onPointerMove={movePointer}
-            onPointerUp={endPointer}
-            ref={canvasRef}
-          />
-          {editingTextAnnotation && textEditorStyle ? (
-            <input
-              aria-label="Edit selected text annotation"
-              className={styles.canvasTextEditor}
-              onBlur={finishTextEditing}
-              onChange={(event) => updateTextAnnotation(editingTextAnnotation.id, event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === "Escape") {
-                  event.preventDefault();
-                  finishTextEditing();
-                }
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-              ref={textEditorRef}
-              style={textEditorStyle}
-              value={editingTextAnnotation.text}
-            />
+      <section className={styles.canvasStage}>
+        <div className={styles.canvasViewport} ref={canvasStageRef}>
+          {!versions.length ? (
+            <p className={sourceLoadError ? styles.canvasErrorNote : styles.canvasEmptyNote}>
+              {sourceLoadError || "Upload or choose an image to mark the edits you want."}
+            </p>
           ) : null}
+          <div className={styles.canvasFrame} ref={canvasFrameRef}>
+            <canvas
+              aria-label="Image editing canvas"
+              className={styles.annotationCanvas}
+              onPointerCancel={endPointer}
+              onPointerDown={beginPointer}
+              onPointerMove={movePointer}
+              onPointerUp={endPointer}
+              ref={canvasRef}
+            />
+            {editingTextAnnotation && textEditorStyle ? (
+              <input
+                aria-label="Edit selected note"
+                className={styles.canvasTextEditor}
+                onBlur={finishTextEditing}
+                onChange={(event) => updateTextAnnotation(editingTextAnnotation.id, event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault();
+                    finishTextEditing();
+                  }
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                ref={textEditorRef}
+                style={textEditorStyle}
+                value={editingTextAnnotation.text}
+              />
+            ) : null}
+          </div>
         </div>
       </section>
-    </main>
+      </main>
+    </ConfigProvider>
   );
 }

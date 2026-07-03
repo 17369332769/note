@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowUpRight, Blocks, Code2, FileCode2, Layers3 } from "lucide-react";
 import { plugins } from "@/lib/plugins";
 
@@ -53,9 +54,16 @@ export default function Home() {
           {plugins.map((plugin) => (
             <Link className="plugin-card" href={`/plugins/${plugin.slug}`} key={plugin.slug}>
               <div className="plugin-card__top">
-                <span className="status">{plugin.status}</span>
+                {plugin.iconPath ? (
+                  <Image className="plugin-icon" src={plugin.iconPath} alt="" width={64} height={64} aria-hidden="true" />
+                ) : (
+                  <span className="plugin-icon plugin-icon--placeholder">
+                    <Blocks size={24} aria-hidden="true" />
+                  </span>
+                )}
                 <ArrowUpRight size={18} aria-hidden="true" />
               </div>
+              <span className="status">{plugin.status}</span>
               <h3>{plugin.name}</h3>
               <p>{plugin.tagline}</p>
               <div className="host-list">

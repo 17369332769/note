@@ -1,6 +1,12 @@
 import { buildImageEditPrompt, hashPrompt, imageMarkupPromptVersion } from "@/lib/image-markup/aiPrompt";
+import {
+  createImgv2ImageGeneration,
+  getConfiguredImageGenerationProvider,
+  getImgv2ImageGenerationConfig,
+} from "@/lib/image-markup/imageGeneration";
 import { createR2DownloadUrl, createR2UploadUrl } from "@/lib/image-markup/r2";
 import { describeRunningHubError, normalizeRunningHubAspectRatio, pickScalarString } from "@/lib/image-markup/runninghub";
+import { assertAiRevisionSessionAccess } from "@/lib/image-markup/sessionAccess";
 import type { AiRevisionRequest } from "@/lib/image-markup/types";
 import { jsonWithCors, optionsWithCors } from "../cors";
 
@@ -28,9 +34,14 @@ export function OPTIONS() {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.RUNNINGHUB_API_KEY;
-  if (!apiKey) {
+  const provider = getConfiguredImageGenerationProvider();
+  const runningHubApiKey = process.env.RUNNINGHUB_API_KEY;
+  const imgv2Config = getImgv2ImageGenerationConfig();
+  if (provider === "runninghub" && !runningHubApiKey) {
     return jsonWithCors({ ok: false, error: "RUNNINGHUB_API_KEY is not configured." }, { status: 503 });
+  }
+  if (provider === "imgv2" && !imgv2Config.apiKey) {
+    return jsonWithCors({ ok: false, error: "IMGV2_API_KEY is not configured." }, { status: 503 });
   }
 
   let payload: AiRevisionRequest;
@@ -46,6 +57,15 @@ export async function POST(request: Request) {
   }
 
   try {
+    await assertAiRevisionSessionAccess(payload);
+  } catch (error) {
+    return jsonWithCors(
+      { ok: false, error: error instanceof Error ? error.message : "Invalid editing session." },
+      { status: 403 },
+    );
+  }
+
+  try {
     const maxImageBytes = Number(process.env.IMAGE_MARKUP_MAX_IMAGE_BYTES || maxDefaultImageBytes);
     const imageUrls = getPreparedImageUrls(payload);
     if (!imageUrls) {
@@ -58,28 +78,29 @@ export async function POST(request: Request) {
     });
     const promptHash = hashPrompt(prompt);
 
-    let taskId = "";
-    let revisedImageDataUrl = "";
-    const runningHubImageUrls = imageUrls || (await prepareRunningHubImageUrls(payload));
-    taskId = await createRunningHubTask(apiKey, {
-      prompt,
-      imageUrls: runningHubImageUrls,
-      aspectRatio: normalizeRunningHubAspectRatio(payload.aspectRatio || inferAspectRatio()),
-      resolution: "1k",
-      quality: "low",
-    });
-    const outputUrl = await waitForRunningHubResult(apiKey, taskId);
-    revisedImageDataUrl = await fetchResultAsPngDataUrl(outputUrl);
+    const revision =
+      provider === "imgv2"
+        ? await createImgv2ImageGeneration(
+            imgv2Config,
+            buildImgv2RevisionPrompt({
+              prompt,
+              imageUrls: imageUrls || (await prepareRunningHubImageUrls(payload)),
+            }),
+          )
+        : await createRunningHubRevision(runningHubApiKey || "", payload, prompt, imageUrls);
 
     return jsonWithCors({
       ok: true,
-      revisedImageDataUrl,
-      provider: "runninghub",
-      taskId,
+      revisedImageDataUrl: revision.revisedImageDataUrl,
+      provider,
+      taskId: revision.taskId,
       promptVersion: imageMarkupPromptVersion,
       promptHash,
-      resolution: "1k",
-      quality: "low",
+      resolution: provider === "runninghub" ? "1k" : imgv2Config.size,
+      quality: provider === "runninghub" ? "low" : imgv2Config.modelConfigKey,
+      model: provider === "imgv2" ? imgv2Config.model : "rhart-image-g-2-official",
+      modelConfigKey: provider === "imgv2" ? imgv2Config.modelConfigKey : undefined,
+      size: provider === "imgv2" ? imgv2Config.size : undefined,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -91,6 +112,39 @@ export async function POST(request: Request) {
       { status: 502 },
     );
   }
+}
+
+async function createRunningHubRevision(
+  apiKey: string,
+  payload: AiRevisionRequest,
+  prompt: string,
+  imageUrls: [string, string] | null,
+) {
+  const runningHubImageUrls = imageUrls || (await prepareRunningHubImageUrls(payload));
+  const taskId = await createRunningHubTask(apiKey, {
+    prompt,
+    imageUrls: runningHubImageUrls,
+    aspectRatio: normalizeRunningHubAspectRatio(payload.aspectRatio || inferAspectRatio()),
+    resolution: "1k",
+    quality: "low",
+  });
+  const outputUrl = await waitForRunningHubResult(apiKey, taskId);
+  return {
+    revisedImageDataUrl: await fetchResultAsPngDataUrl(outputUrl),
+    taskId,
+  };
+}
+
+function buildImgv2RevisionPrompt(args: { prompt: string; imageUrls: [string, string] }) {
+  return `
+${args.prompt}
+
+Reference images:
+- Original image URL: ${args.imageUrls[0]}
+- Annotated instruction image URL: ${args.imageUrls[1]}
+
+Use the original image URL as the base image and the annotated instruction image URL only to understand the requested edits.
+`.trim();
 }
 
 function validatePayload(payload: Partial<AiRevisionRequest>) {

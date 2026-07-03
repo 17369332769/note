@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CheckCircle2, FileCode2, Terminal } from "lucide-react";
 import { getPlugin, plugins } from "@/lib/plugins";
@@ -22,6 +23,7 @@ export async function generateMetadata({ params }: Props) {
   return {
     title: `${plugin.name} | Workspace Add-ons Lab`,
     description: plugin.summary,
+    icons: plugin.iconPath ? [{ url: plugin.iconPath }] : undefined,
   };
 }
 
@@ -40,6 +42,9 @@ export default async function PluginPage({ params }: Props) {
           <ArrowLeft size={18} />
           返回插件列表
         </Link>
+        {plugin.iconPath ? (
+          <Image className="detail-icon" src={plugin.iconPath} alt="" width={104} height={104} aria-hidden="true" priority />
+        ) : null}
         <p className="eyebrow">{plugin.hosts.join(" / ")}</p>
         <h1>{plugin.name}</h1>
         <p className="hero__copy">{plugin.summary}</p>

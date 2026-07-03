@@ -8,6 +8,7 @@ export type Plugin = {
   hosts: WorkspaceHost[];
   summary: string;
   audience: string;
+  iconPath?: string;
   appScriptPath: string;
   features: string[];
   setup: string[];
@@ -20,6 +21,7 @@ export const plugins: Plugin[] = [
     tagline: "Mark up Google Docs images and generate clean AI revisions.",
     status: "prototype",
     hosts: ["Docs"],
+    iconPath: "/plugins/image-markup/icon.png",
     summary:
       "A Google Docs add-on prototype that scans inline images or starts a local-upload session, opens an external canvas editor, saves annotated PNGs and edit briefs to Drive, and can call RunningHub to create clean revised images.",
     audience: "Docs users who need to mark image edits with arrows, boxes, notes, and then insert a clean AI-revised copy back into the document.",

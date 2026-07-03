@@ -128,8 +128,8 @@ h3 {
 }
 
 .button--primary {
-  border-color: var(--panel-strong);
-  background: var(--panel-strong);
+  border-color: var(--blue);
+  background: var(--blue);
   color: white;
 }
 
@@ -213,6 +213,27 @@ h3 {
   justify-content: space-between;
 }
 
+.plugin-icon,
+.detail-icon {
+  display: block;
+  object-fit: contain;
+}
+
+.plugin-icon {
+  width: 64px;
+  height: 64px;
+}
+
+.plugin-icon--placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f3f6fb;
+  color: var(--blue);
+}
+
 .plugin-card p {
   margin: 0;
   color: var(--muted);
@@ -264,6 +285,12 @@ h3 {
 
 .detail-hero {
   border-bottom: 1px solid var(--line);
+}
+
+.detail-icon {
+  width: 104px;
+  height: 104px;
+  margin-bottom: 24px;
 }
 
 .back-link {

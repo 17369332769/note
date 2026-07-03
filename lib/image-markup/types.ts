@@ -51,17 +51,21 @@ export type EditBrief = {
 };
 
 export type AiRevisionMetadata = {
-  provider: "runninghub";
+  provider: "runninghub" | "imgv2";
   taskId: string;
   promptVersion: "image-markup-ai-edit-v1";
   promptHash: string;
-  resolution: "1k";
-  quality: "low";
+  resolution: string;
+  quality: string;
+  model?: string;
+  modelConfigKey?: string;
+  size?: string;
   generatedAt: string;
 };
 
 export type AiRevisionRequest = {
   sessionId: string;
+  sessionToken?: string;
   originalImageDataUrl?: string;
   annotatedImageDataUrl?: string;
   preparedImageUrls?: [string, string];

@@ -92,22 +92,24 @@ assert.match(aiRoute, /createR2DownloadUrl/);
 assert.match(aiRoute, /uploadDataUrlToR2/);
 assert.match(aiRoute, /getPreparedImageUrls/);
 assert.match(aiRoute, /preparedImageUrls/);
+assert.match(aiRoute, /assertAiRevisionSessionAccess/, "AI revision route must verify the editor session before provider calls");
 
 const editorPage = read("app/image-markup/page.tsx");
 assert.match(editorPage, /bridgeEnabled/);
 assert.match(editorPage, /callAppsScriptBridge/);
+assert.match(editorPage, /sessionToken/, "Editor must pass the session token to backend calls");
 assert.match(editorPage, /prepareRunningHubImagesWithR2/);
 assert.match(editorPage, /uploadBlobToR2/);
 assert.match(editorPage, /parseAiRevisionResponse/);
+assert.match(editorPage, /\/api\/image-markup\/ai-revision/);
+assert.match(editorPage, /Generate/);
+assert.doesNotMatch(editorPage, /Save marked-up image/);
+assert.doesNotMatch(editorPage, /Save clean revision/);
 assert.doesNotMatch(
   editorPage,
   /originalImageDataUrl,\s*\r?\n\s*annotatedImageDataUrl,\s*\r?\n\s*preparedImageUrls/,
   "AI revision request should send prepared R2 URLs instead of base64 image payloads",
 );
-assert.match(editorPage, /saveEditorOutput/);
-
-const saveRoute = read("app/api/image-markup/save/route.ts");
-assert.doesNotMatch(saveRoute, /payload,\s*$/m, "save route must not echo image payloads when callback is missing");
 
 const manifest = read("plugins/image-markup/appscript/appsscript.json");
 assert.match(manifest, /documents\.currentonly/);

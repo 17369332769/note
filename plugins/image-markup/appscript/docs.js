@@ -1,223 +1,117 @@
 /**
- * Docs-specific homepage.
- *
- * @param {Object=} event Workspace event.
- * @return {CardService.Card[]}
- */
-function buildDocsHomeCard(event) {
-  return [buildDocsSourceCard_('document')];
-}
-
-/**
- * Builds the Docs image source picker.
- *
- * @param {string=} activeTab Active Docs source tab.
- * @return {CardService.Card}
- */
-function buildDocsSourceCard_(activeTab) {
-  const tab = activeTab || 'document';
-  const builder = CardService.newCardBuilder()
-    .setHeader(CardService.newCardHeader().setTitle(ADDON_NAME).setSubtitle('Google Docs'));
-
-  builder.addSection(buildDocsTabBarSection_(tab));
-
-  if (tab === 'upload') {
-    builder.addSection(buildDocsUploadSection_());
-  } else {
-    builder.addSection(buildDocsDocumentSection_());
-  }
-
-  builder.addSection(buildDocsUtilitySection_());
-
-  return builder.build();
-}
-
-/**
- * Builds the top tab bar section for Docs.
- *
- * @param {string} activeTab Active tab.
- * @return {CardService.CardSection}
- */
-function buildDocsTabBarSection_(activeTab) {
-  return CardService.newCardSection()
-    .addWidget(buildDocsSourceTabs_(activeTab));
-}
-
-/**
- * Builds the Docs source tab selector.
- *
- * @param {string} activeTab Active tab.
- * @return {CardService.ButtonSet}
- */
-function buildDocsSourceTabs_(activeTab) {
-  return CardService.newButtonSet()
-    .addButton(buildDocsSourceTabButton_('文档图片', 'document', activeTab))
-    .addButton(buildDocsSourceTabButton_('本地上传', 'upload', activeTab));
-}
-
-/**
- * Builds a single Docs source tab button.
- *
- * @param {string} label Button label.
- * @param {string} tab Tab key.
- * @param {string} activeTab Active tab.
- * @return {CardService.TextButton}
- */
-function buildDocsSourceTabButton_(label, tab, activeTab) {
-  const button = CardService.newTextButton()
-    .setText(label)
-    .setOnClickAction(CardService.newAction().setFunctionName('showDocsSourceTab').setParameters({ tab: tab }));
-
-  if (tab === activeTab) {
-    button.setTextButtonStyle(CardService.TextButtonStyle.FILLED);
-  } else {
-    button.setTextButtonStyle(CardService.TextButtonStyle.TEXT);
-  }
-
-  return button;
-}
-
-/**
- * Updates the Docs source card after tab changes.
- *
- * @param {Object} event Workspace action event.
- * @return {CardService.ActionResponse}
- */
-function showDocsSourceTab(event) {
-  const parameters = event && event.parameters ? event.parameters : {};
-  return updateCard_(buildDocsSourceCard_(parameters.tab || 'document'));
-}
-
-/**
- * Builds the current document source section.
- *
- * @return {CardService.CardSection}
- */
-function buildDocsDocumentSection_() {
-  return CardService.newCardSection()
-    .addWidget(CardService.newTextButton().setText('选择文档中的图片').setOnClickAction(CardService.newAction().setFunctionName('scanDocsImages')));
-}
-
-/**
- * Builds the upload source section.
- *
- * @return {CardService.CardSection}
- */
-function buildDocsUploadSection_() {
-  return CardService.newCardSection()
-    .addWidget(CardService.newTextParagraph().setText('打开编辑器后在页面内上传 PNG、JPEG 或 WebP 图片。'))
-    .addWidget(CardService.newTextButton().setText('上传本地图片').setOnClickAction(CardService.newAction().setFunctionName('createDocsLocalUploadSession')));
-}
-
-/**
- * Builds secondary Docs actions below the source tabs.
- *
- * @return {CardService.CardSection}
- */
-function buildDocsUtilitySection_() {
-  return CardService.newCardSection()
-    .setHeader('更多')
-    .addWidget(CardService.newTextButton().setText('最近会话').setOnClickAction(CardService.newAction().setFunctionName('showRecentSessions')))
-    .addWidget(CardService.newTextButton().setText('设置').setOnClickAction(CardService.newAction().setFunctionName('showSettings')));
-}
-
-/**
- * Scans the current Google Doc for inline images.
- *
- * @return {CardService.ActionResponse}
- */
-function scanDocsImages() {
-  try {
-    const doc = DocumentApp.getActiveDocument();
-    if (!doc) {
-      return navigateToCard_(buildUnsupportedCard_('未打开文档', '请先打开一个 Google Doc，再选择图片。'));
-    }
-
-    const images = getDocsInlineImages_(doc);
-    return navigateToCard_(buildImageListCard_('当前文档图片', images, 'docs'));
-  } catch (error) {
-    return buildErrorResponse_(error);
-  }
-}
-
-/**
- * Returns Docs inline images for the HtmlService sidebar.
+ * Creates a prepared editor session from the currently selected Docs image.
  *
  * @return {Object}
  */
-function listDocsImagesForSidebar() {
+function createDocsSelectedImageSessionFromSidebar() {
   const doc = DocumentApp.getActiveDocument();
   if (!doc) {
-    throw new Error('请先打开一个 Google Doc，再选择图片。');
+    throw new Error('Open a Google Doc before finding images.');
   }
 
-  return {
-    ok: true,
-    images: getDocsInlineImages_(doc)
-  };
-}
-
-/**
- * Creates a prepared editor session for a Docs inline image.
- *
- * @param {number|string} imageIndex Image index from listDocsImagesForSidebar.
- * @return {Object}
- */
-function createDocsImageSessionFromSidebar(imageIndex) {
-  const doc = DocumentApp.getActiveDocument();
-  if (!doc) {
-    throw new Error('请先打开一个 Google Doc，再选择图片。');
+  const selectedImage = findSelectedDocsInlineImage_(doc);
+  if (!selectedImage) {
+    throw new Error('Select an inline image in the document, then try again.');
   }
 
-  const images = getDocsInlineImages_(doc);
-  const index = Number(imageIndex);
-  const source = images[index];
-  if (!source) {
-    throw new Error('找不到所选文档图片。');
-  }
-
+  const source = Object.assign({}, selectedImage.source);
+  const image = selectedImage.image;
+  delete source.previewDataUrl;
   const session = createSessionForSource_('docs', source);
   return {
     ok: true,
     sessionId: session.id,
-    label: source.label,
-    width: source.width,
-    height: source.height
+    image: image
   };
 }
 
 /**
- * Creates an annotation session for a local upload from Docs.
+ * Finds the first inline image inside the current Docs selection.
  *
- * @param {Object} event Workspace action event.
- * @return {CardService.ActionResponse}
+ * @param {GoogleAppsScript.Document.Document} doc Active document.
+ * @return {{source:Object,image:Object}|null}
  */
-function createDocsLocalUploadSession(event) {
-  try {
-    const doc = DocumentApp.getActiveDocument();
-    if (!doc) {
-      throw new Error('请先打开一个 Google Doc，再上传图片。');
+function findSelectedDocsInlineImage_(doc) {
+  const selection = doc.getSelection();
+  if (!selection) return null;
+
+  const rangeElements = selection.getRangeElements();
+  for (let rangeIndex = 0; rangeIndex < rangeElements.length; rangeIndex += 1) {
+    const selectedElement = findInlineImageInElement_(rangeElements[rangeIndex].getElement());
+    if (selectedElement) {
+      const imageIndex = getDocsInlineImageIndex_(doc, selectedElement);
+      if (imageIndex < 0) return null;
+      const preview = buildDocsImageSource_(doc, selectedElement, imageIndex);
+      return {
+        source: preview,
+        image: preview
+      };
     }
+  }
 
-    const source = {
-      type: 'local-upload',
-      documentId: doc.getId(),
-      label: '本地上传图片',
-      filename: 'uploaded-image.png'
-    };
-    const session = createSessionForSource_('docs', source);
-    openImageMarkupEditorDialog({
-      sessionId: session.id,
-      sourceLabel: source.label,
-      apptype: 'addon',
-      localUpload: 1
-    });
+  return null;
+}
 
-    return CardService.newActionResponseBuilder()
-      .setNotification(CardService.newNotification().setText('已在弹窗中打开上传编辑器。'))
-      .build();
+/**
+ * Finds an inline image at or under a Docs element.
+ *
+ * @param {GoogleAppsScript.Document.Element} element Element.
+ * @return {GoogleAppsScript.Document.InlineImage|null}
+ */
+function findInlineImageInElement_(element) {
+  if (!element) return null;
+  if (element.getType && element.getType() === DocumentApp.ElementType.INLINE_IMAGE) {
+    return element.asInlineImage();
+  }
+  if (!element.getNumChildren) return null;
+
+  for (let index = 0; index < element.getNumChildren(); index += 1) {
+    const found = findInlineImageInElement_(element.getChild(index));
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Returns the document order index for an inline image element.
+ *
+ * @param {GoogleAppsScript.Document.Document} doc Active document.
+ * @param {GoogleAppsScript.Document.InlineImage} target Inline image.
+ * @return {number}
+ */
+function getDocsInlineImageIndex_(doc, target) {
+  let foundIndex = -1;
+  let currentIndex = 0;
+  const targetSignature = getInlineImageSignature_(target);
+  walkDocsElement_(doc.getBody(), function (element) {
+    if (foundIndex !== -1 || !element.getType || element.getType() !== DocumentApp.ElementType.INLINE_IMAGE) return;
+    const inlineImage = element.asInlineImage();
+    if (inlineImage === target || getInlineImageSignature_(inlineImage) === targetSignature) {
+      foundIndex = currentIndex;
+      return;
+    }
+    currentIndex += 1;
+  });
+  return foundIndex;
+}
+
+/**
+ * Builds a lightweight signature for matching a selected image back to document order.
+ *
+ * @param {GoogleAppsScript.Document.InlineImage} inlineImage Inline image.
+ * @return {string}
+ */
+function getInlineImageSignature_(inlineImage) {
+  try {
+    const blob = inlineImage.getBlob();
+    return [
+      inlineImage.getWidth(),
+      inlineImage.getHeight(),
+      blob.getContentType(),
+      blob.getBytes().length
+    ].join(':');
   } catch (error) {
-    return buildErrorResponse_(error);
+    return [inlineImage.getWidth(), inlineImage.getHeight()].join(':');
   }
 }
 
@@ -231,13 +125,13 @@ function createDocsUploadSessionFromSidebar(payload) {
   const body = payload || {};
   const doc = DocumentApp.getActiveDocument();
   if (!doc) {
-    throw new Error('请先打开一个 Google Doc，再上传图片。');
+    throw new Error('Open a Google Doc before uploading an image.');
   }
   if (!isSupportedImageMimeType_(body.mimeType)) {
-    throw new Error('仅支持 PNG、JPEG 或 WebP 图片。');
+    throw new Error('Use a PNG, JPEG, or WebP image.');
   }
   if (!body.r2Key) {
-    throw new Error('缺少已上传图片的 R2 key。');
+    throw new Error('The uploaded image is missing its storage key. Please upload it again.');
   }
 
   const filename = body.name || 'uploaded-image';
@@ -254,6 +148,7 @@ function createDocsUploadSessionFromSidebar(payload) {
   const session = createSessionForSource_('docs', source);
   session.editorUrl = buildHostedEditorUrl_({
     sessionId: session.id,
+    sessionToken: session.accessToken,
     sourceLabel: filename,
     apptype: 'addon'
   });
@@ -281,18 +176,47 @@ function getDocsInlineImages_(doc) {
     if (element.getType && element.getType() === DocumentApp.ElementType.INLINE_IMAGE) {
       const inlineImage = element.asInlineImage();
       const index = images.length;
-      images.push({
-        type: 'docs-inline-image',
-        documentId: doc.getId(),
-        label: '文档图片 ' + (index + 1),
-        imageIndex: index,
-        width: inlineImage.getWidth(),
-        height: inlineImage.getHeight()
-      });
+      images.push(buildDocsImageSource_(doc, inlineImage, index));
     }
   });
 
   return images;
+}
+
+/**
+ * Builds source metadata for a Docs inline image.
+ *
+ * @param {GoogleAppsScript.Document.Document} doc Active document.
+ * @param {GoogleAppsScript.Document.InlineImage} inlineImage Inline image.
+ * @param {number} index Image index.
+ * @return {Object}
+ */
+function buildDocsImageSource_(doc, inlineImage, index) {
+  return {
+    type: 'docs-inline-image',
+    documentId: doc.getId(),
+    label: 'Document image ' + (index + 1),
+    imageIndex: index,
+    width: inlineImage.getWidth(),
+    height: inlineImage.getHeight(),
+    previewDataUrl: buildInlineImagePreviewDataUrl_(inlineImage)
+  };
+}
+
+/**
+ * Builds a data URL preview for a Docs inline image.
+ *
+ * @param {GoogleAppsScript.Document.InlineImage} inlineImage Inline image.
+ * @return {string}
+ */
+function buildInlineImagePreviewDataUrl_(inlineImage) {
+  try {
+    const blob = inlineImage.getBlob();
+    const contentType = blob.getContentType() || 'image/png';
+    return 'data:' + contentType + ';base64,' + Utilities.base64Encode(blob.getBytes());
+  } catch (error) {
+    return '';
+  }
 }
 
 /**
@@ -317,7 +241,10 @@ function walkDocsElement_(element, visitor) {
  * @return {Blob}
  */
 function getDocsImageBlob_(source) {
-  const doc = DocumentApp.openById(source.documentId);
+  const activeDoc = DocumentApp.getActiveDocument();
+  const doc = activeDoc && activeDoc.getId && activeDoc.getId() === source.documentId
+    ? activeDoc
+    : DocumentApp.openById(source.documentId);
   const images = [];
 
   walkDocsElement_(doc.getBody(), function (element) {
@@ -328,7 +255,7 @@ function getDocsImageBlob_(source) {
 
   const inlineImage = images[source.imageIndex];
   if (!inlineImage) {
-    throw new Error('找不到源文档图片。');
+    throw new Error('The source image is no longer available in this document.');
   }
 
   return inlineImage.getBlob().setName((source.label || 'doc-image') + '.png');
@@ -345,13 +272,13 @@ function insertIntoDocs(event) {
     const session = requireSessionFromEvent_(event);
     const outputImageR2Key = session.revisedImageR2Key || session.annotatedImageR2Key;
     if (!outputImageR2Key) {
-      throw new Error('请先保存标注图或修订图，再插入文档。');
+      throw new Error('Save a marked-up image or clean revision before inserting it into the document.');
     }
 
     const doc = DocumentApp.openById(session.source.documentId);
     const body = doc.getBody();
     const imageBlob = fetchR2Blob_(outputImageR2Key, session.id + '-output.png', 'image/png');
-    const title = session.revisedImageR2Key ? '修订图：' : '标注图：';
+    const title = session.revisedImageR2Key ? 'Clean revision: ' : 'Marked-up image: ';
     body.appendParagraph(title + (session.source.label || session.id)).setHeading(DocumentApp.ParagraphHeading.HEADING3);
     body.appendImage(imageBlob);
 
@@ -361,7 +288,7 @@ function insertIntoDocs(event) {
         ? fetchR2Text_(session.editBriefR2Key)
         : '';
     if (briefText) {
-      body.appendParagraph('修改说明').setHeading(DocumentApp.ParagraphHeading.HEADING4);
+      body.appendParagraph('Edit notes').setHeading(DocumentApp.ParagraphHeading.HEADING4);
       body.appendParagraph(briefText);
     }
 
@@ -370,7 +297,7 @@ function insertIntoDocs(event) {
     saveSession_(session);
 
     return CardService.newActionResponseBuilder()
-      .setNotification(CardService.newNotification().setText(session.revisedImageR2Key ? '修订图已插入文档。' : '标注图已插入文档。'))
+      .setNotification(CardService.newNotification().setText(session.revisedImageR2Key ? 'Clean revision inserted into the document.' : 'Marked-up image inserted into the document.'))
       .build();
   } catch (error) {
     return buildErrorResponse_(error);
@@ -393,7 +320,7 @@ function fetchR2Blob_(key, filename, fallbackMimeType) {
   });
   const status = response.getResponseCode();
   if (status < 200 || status >= 300) {
-    throw new Error('无法下载 R2 图片。');
+    throw new Error('Could not download the saved image.');
   }
 
   const headers = response.getHeaders();
@@ -415,7 +342,7 @@ function fetchR2Text_(key) {
   });
   const status = response.getResponseCode();
   if (status < 200 || status >= 300) {
-    throw new Error('无法下载 R2 文本。');
+    throw new Error('Could not download the edit notes.');
   }
   return response.getContentText();
 }
@@ -439,7 +366,7 @@ function createR2DownloadUrl_(key) {
   const status = response.getResponseCode();
   const json = JSON.parse(response.getContentText() || '{}');
   if (status < 200 || status >= 300 || !json.ok || !json.downloadUrl) {
-    throw new Error(json.error || '无法创建 R2 下载链接。');
+    throw new Error(json.error || 'Could not create a download link.');
   }
   return json.downloadUrl;
 }

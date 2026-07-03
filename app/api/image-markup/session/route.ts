@@ -8,9 +8,13 @@ export async function GET(request: Request) {
   const callbackUrl = process.env.APPS_SCRIPT_WEBAPP_URL;
   const { searchParams } = new URL(request.url);
   const sessionId = searchParams.get("sessionId");
+  const sessionToken = searchParams.get("sessionToken");
 
   if (!sessionId) {
     return jsonWithCors({ ok: false, error: "sessionId is required." }, { status: 400 });
+  }
+  if (!sessionToken) {
+    return jsonWithCors({ ok: false, error: "sessionToken is required." }, { status: 400 });
   }
 
   if (!callbackUrl) {
@@ -19,6 +23,7 @@ export async function GET(request: Request) {
 
   const url = new URL(callbackUrl);
   url.searchParams.set("sessionId", sessionId);
+  url.searchParams.set("sessionToken", sessionToken);
   url.searchParams.set("includeImage", "1");
 
   const response = await fetch(url);

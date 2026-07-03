@@ -16,7 +16,7 @@ v1 支持：
 - Docs 侧边栏本地上传。
 - Next.js 大画布标注。
 - RunningHub AI 修订图。
-- R2 signed upload/download URL。
+- R2 object upload and signed download URL。
 - 将标注图或修订图插入当前 Doc。
 
 v1 不支持：
@@ -60,7 +60,7 @@ Google Docs append image + edit brief
 | 来源 | UI | 数据流 |
 | --- | --- | --- |
 | 文档图片 | `文档图片` tab，按钮文案 `选择文档中的图片` | Apps Script 遍历当前 Doc inline images，编辑器打开时返回 data URL。 |
-| 本地上传 | `本地上传` tab，按钮文案 `上传本地图片` | 浏览器请求 R2 signed upload URL，PUT 图片到 R2，再把 `r2Key` 写入 session。 |
+| 本地上传 | `本地上传` tab，按钮文案 `上传本地图片` | 浏览器把文件提交到 Next.js `/api/image-markup/r2/upload`，服务端写入 R2，再把 `r2Key` 写入 session。 |
 
 侧边栏只有在图片会话准备好后才显示 `打开大画布`。
 
@@ -114,11 +114,8 @@ plugins/image-markup/appscript/
   Code.js
   Sidebar.html
   Dialog.html
-  cards.js
   docs.js
-  drive.js      # unsupported-source compatibility shim; no Drive API calls
   sessions.js
-  slides.js     # legacy/unused path; output insertion uses R2 helper if called
   webapp.js
 ```
 
@@ -140,8 +137,9 @@ Do not add:
 
 The Next.js backend exposes:
 
-- `POST /api/image-markup/r2/upload-url`
+- `POST /api/image-markup/r2/upload`
 - `POST /api/image-markup/r2/download-url`
+- `GET /api/image-markup/r2/object`
 
 Stored objects:
 
