@@ -17,6 +17,7 @@ function onOpen(event) {
 
   ui.createAddonMenu()
     .addItem('Start', 'showImageMarkupSidebar')
+    .addItem('Help', 'showImageMarkupHelp')
     .addToUi();
 }
 
@@ -39,6 +40,18 @@ function showImageMarkupSidebar() {
   }
 
   ui.showSidebar(buildLauncherSidebarHtml_());
+}
+
+/**
+ * Opens Image Markup help from the Extensions menu.
+ */
+function showImageMarkupHelp() {
+  const ui = getEditorUi_();
+  if (!ui) {
+    throw new Error('Open Image Markup from Google Docs.');
+  }
+
+  ui.showModalDialog(buildHelpHtml_(), ADDON_NAME + ' Help');
 }
 
 /**
@@ -124,6 +137,46 @@ function buildEditorHtml_(params) {
 }
 
 /**
+ * Builds the help dialog.
+ *
+ * @return {GoogleAppsScript.HTML.HtmlOutput}
+ */
+function buildHelpHtml_() {
+  return HtmlService
+    .createHtmlOutput([
+      '<!doctype html>',
+      '<html><head><base target="_top"><meta charset="utf-8">',
+      '<style>',
+      'body{box-sizing:border-box;margin:0;padding:20px;font:14px/1.55 Arial,"Microsoft YaHei",sans-serif;color:#1f2937;background:#fff;}',
+      'h1{margin:0 0 12px;font-size:20px;line-height:1.25;}',
+      'h2{margin:18px 0 8px;font-size:14px;}',
+      'ol,ul{margin:8px 0 0 20px;padding:0;}',
+      'li{margin:6px 0;}',
+      '.note{margin-top:14px;padding:10px 12px;border:1px solid #dbeafe;border-radius:8px;background:#eff6ff;color:#1e40af;}',
+      '</style></head><body>',
+      '<h1>Image Markup Help</h1>',
+      '<h2>Document image</h2>',
+      '<ol>',
+      '<li>Select an inline image in the Google Doc.</li>',
+      '<li>Open Image Markup and click <strong>Select image</strong>.</li>',
+      '<li>After the preview appears, click <strong>Edit</strong>.</li>',
+      '</ol>',
+      '<h2>In the editor</h2>',
+      '<ul>',
+      '<li>Use arrows, boxes, freehand marks, and notes to describe the change.</li>',
+      '<li>Click <strong>Generate</strong> to create a clean revision.</li>',
+      '<li>Click <strong>Download canvas PNG</strong> to export the full canvas.</li>',
+      '</ul>',
+      '<h2>Upload</h2>',
+      '<p>Use the Upload tab for PNG, JPEG, or WebP files that are not already in the document.</p>',
+      '<div class="note">If Select image does not find anything, click directly on an inline image in the Doc and try again.</div>',
+      '</body></html>'
+    ].join(''))
+    .setWidth(460)
+    .setHeight(430);
+}
+
+/**
  * Builds a hosted editor URL without depending on compiled Next.js assets.
  *
  * @param {Object} params Editor query parameters.
@@ -143,7 +196,7 @@ function buildHostedEditorUrl_(params) {
     query.push('localUpload=1');
   }
 
-  return getEditorBaseUrl_().replace(/\/+$/, '') + '/image-markup?' + query.join('&');
+  return getEditorBaseUrl_().replace(/\/+$/, '') + '/image-markup/editor?' + query.join('&');
 }
 
 /**

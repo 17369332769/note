@@ -93,8 +93,27 @@ assert.match(aiRoute, /uploadDataUrlToR2/);
 assert.match(aiRoute, /getPreparedImageUrls/);
 assert.match(aiRoute, /preparedImageUrls/);
 assert.match(aiRoute, /assertAiRevisionSessionAccess/, "AI revision route must verify the editor session before provider calls");
+assert.match(aiRoute, /consumeAiRevisionSessionQuota/, "AI revision route must enforce per-session generation quota");
+assert.match(aiRoute, /status:\s*429/, "AI revision route must return 429 when the session quota is exceeded");
 
-const editorPage = read("app/image-markup/page.tsx");
+const sessionAccess = read("lib/image-markup/sessionAccess.ts");
+assert.match(sessionAccess, /verifyAiSessionToken/, "AI session access must verify the signed backend token locally");
+assert.doesNotMatch(
+  sessionAccess,
+  /APPS_SCRIPT_WEBAPP_URL/,
+  "AI session access must not call Apps Script during generation",
+);
+
+const sessionTokenRoute = read("app/api/image-markup/session-token/route.ts");
+assert.match(sessionTokenRoute, /IMAGE_MARKUP_SESSION_EXCHANGE_SECRET|x-image-markup-exchange-secret/);
+assert.match(sessionTokenRoute, /signAiSessionToken/);
+
+const sessionRateLimit = read("lib/image-markup/sessionRateLimit.ts");
+assert.match(sessionRateLimit, /IMAGE_MARKUP_AI_SESSION_LIMIT/);
+assert.match(sessionRateLimit, /defaultSessionLimit\s*=\s*10/);
+assert.match(sessionRateLimit, /image-markup\/rate-limits/);
+
+const editorPage = read("app/image-markup/editor/page.tsx");
 assert.match(editorPage, /bridgeEnabled/);
 assert.match(editorPage, /callAppsScriptBridge/);
 assert.match(editorPage, /sessionToken/, "Editor must pass the session token to backend calls");
@@ -103,6 +122,9 @@ assert.match(editorPage, /uploadBlobToR2/);
 assert.match(editorPage, /parseAiRevisionResponse/);
 assert.match(editorPage, /\/api\/image-markup\/ai-revision/);
 assert.match(editorPage, /Generate/);
+assert.match(editorPage, /insertEditorOutput/);
+assert.match(editorPage, /image-markup\/output/);
+assert.match(editorPage, /r2Key:\s*revisedImageR2Key/);
 assert.doesNotMatch(editorPage, /Save marked-up image/);
 assert.doesNotMatch(editorPage, /Save clean revision/);
 assert.doesNotMatch(
@@ -118,16 +140,20 @@ assert.doesNotMatch(manifest, /presentations\.currentonly/, "Docs-only v1 must n
 
 const sessions = read("plugins/image-markup/appscript/sessions.js");
 assert.doesNotMatch(sessions, /getImageUrlBlob_|getSlidesImageBlob_|getDriveImageBlob_/, "Docs-only session routing must not call unsupported source loaders");
+assert.match(sessions, /createHostedSessionToken_/, "Apps Script must exchange trusted sessions for hosted AI tokens");
+assert.match(sessions, /IMAGE_MARKUP_SESSION_EXCHANGE_SECRET/, "Apps Script must use the shared exchange secret");
 
 const webapp = read("plugins/image-markup/appscript/webapp.js");
 assert.match(webapp, /runImageMarkupBridgeAction/);
 assert.match(webapp, /annotatedImageR2Key/);
 assert.match(webapp, /revisedImageR2Key/);
+assert.match(webapp, /insertEditorOutput/);
 assert.doesNotMatch(webapp, /annotatedImageDataUrl/, "Apps Script save should receive R2 keys instead of image payloads");
 
 const editorShell = read("plugins/image-markup/appscript/Dialog.html");
 assert.match(editorShell, /image-markup-request/);
 assert.match(editorShell, /google\.script\.run/);
 assert.match(editorShell, /runImageMarkupBridgeAction/);
+assert.match(editorShell, /insertEditorOutput/);
 
 console.log("Image Markup contracts verified.");

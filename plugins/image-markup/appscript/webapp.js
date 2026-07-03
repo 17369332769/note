@@ -81,6 +81,9 @@ function runImageMarkupBridgeAction(action, payload) {
   if (action === 'saveEditorOutput') {
     return saveEditorOutput(body);
   }
+  if (action === 'insertEditorOutput') {
+    return insertEditorOutput(body);
+  }
   throw new Error('Unsupported editor bridge action.');
 }
 
@@ -160,6 +163,36 @@ function saveEditorOutput(payload) {
   return {
     ok: true,
     output: output
+  };
+}
+
+/**
+ * Inserts the latest generated editor output into the current Google Doc.
+ *
+ * @param {Object} payload Editor insert payload.
+ * @return {Object}
+ */
+function insertEditorOutput(payload) {
+  const session = getSession_(payload.sessionId);
+  if (!session) {
+    throw new Error('This editing session is no longer available. Please start again.');
+  }
+  if (!validateSessionAccess_(session, payload.sessionToken)) {
+    throw new Error('Invalid editing session token.');
+  }
+  if (!payload.imageR2Key) {
+    throw new Error('Generate an image before inserting it into the document.');
+  }
+
+  session.revisedImageR2Key = String(payload.imageR2Key);
+  session.status = 'saved';
+  session.updatedAt = new Date().toISOString();
+  saveSession_(session);
+
+  insertOutputIntoDocs_(session, String(payload.imageR2Key), payload.label || 'Generated image');
+  return {
+    ok: true,
+    imageR2Key: session.revisedImageR2Key
   };
 }
 

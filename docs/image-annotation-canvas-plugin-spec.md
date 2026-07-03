@@ -2,7 +2,7 @@
 
 ## 当前定位
 
-`Image Markup` 是一个面向 Google Docs 的图片标注和 AI 修订 add-on。用户可以在 Docs 侧边栏中选择当前文档里的 inline image，或在侧边栏上传本地图片；随后打开 Next.js `/image-markup` 大画布完成标注、生成修订图、保存结果，并把输出插入回当前 Doc。
+`Image Markup` 是一个面向 Google Docs 的图片标注和 AI 修订 add-on。用户可以在 Docs 侧边栏中选择当前文档里的 inline image，或在侧边栏上传本地图片；随后打开 Next.js `/image-markup/editor` 大画布完成标注、生成修订图、保存结果，并把输出插入回当前 Doc。
 
 当前版本不使用 Google Drive 作为图片来源或输出存储，不请求 Drive OAuth scope，也不调用 `DriveApp`。图片对象存储使用 Cloudflare R2，Apps Script 只保存 session metadata 和 R2 object key。
 
@@ -176,3 +176,4 @@ Text input focus must not block later annotation selection or movement.
 8. Docs insertion fetches output from R2 and inserts it into the active Doc.
 9. Manifest contains no Drive scopes.
 10. Source contains no active `DriveApp` usage.
+

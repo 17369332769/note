@@ -2,7 +2,7 @@
 
 ## 背景
 
-本项目正在构建 `Image Markup`，一个面向 Google Docs 的 Google Workspace add-on。当前计划暂时只做 Docs 场景：用户可以从当前文档中选择 inline image，也可以在外部编辑器中上传本地图片；随后打开 `/image-markup` 编辑器，绘制标注，导出标注 PNG，保存 edit brief，并通过 Apps Script 把结果插回当前 Doc。
+本项目正在构建 `Image Markup`，一个面向 Google Docs 的 Google Workspace add-on。当前计划暂时只做 Docs 场景：用户可以从当前文档中选择 inline image，也可以在外部编辑器中上传本地图片；随后打开 `/image-markup/editor` 编辑器，绘制标注，导出标注 PNG，保存 edit brief，并通过 Apps Script 把结果插回当前 Doc。
 
 下一步产品目标是用 RunningHub 图片编辑 API，把 Google Docs 中“带标注的图片”转换成“干净的修订图”。用户应该可以在 Doc 图片上用箭头、框选、自由画笔和文字备注标出修改意见，然后让系统生成一张应用了这些修改、且不包含任何标注痕迹的新图。
 
@@ -27,7 +27,7 @@
 - 不要求任何 Drive scope。
 - 不做通用 Photoshop 式图片编辑器。
 - 本规格不支持 Drive 选中文件、Slides 图片、Gmail、Sheets、Google Picker 或 Marketplace 发布。
-- 本地上传只在外部 `/image-markup` 编辑器中完成，不在 CardService 卡片中实现文件上传。
+- 本地上传只在外部 `/image-markup/editor` 编辑器中完成，不在 CardService 卡片中实现文件上传。
 - 当可获得干净原图时，不只依赖单张标注截图作为改图输入。
 
 ## 当前状态
@@ -37,7 +37,7 @@
 | 模块 | 当前行为 | 参考 |
 | --- | --- | --- |
 | Workspace add-on | 现有 `Image Markup` Apps Script 项目已包含 Docs 相关流程，当前计划只落地 Docs。 | `plugins/image-markup/appscript/` |
-| 编辑器 | 现有 Next.js 编辑器支持标注工具、PNG 导出和 edit brief 流程。 | `app/image-markup/page.tsx` |
+| 编辑器 | 现有 Next.js 编辑器支持标注工具、PNG 导出和 edit brief 流程。 | `app/image-markup/editor/page.tsx` |
 | 数据模型 | `EditBrief` 已经记录全局说明和标注 bounds。 | `lib/image-markup/types.ts` |
 | 保存回调 | 编辑器先上传标注图、修订图和 edit brief 到 R2，Apps Script `saveEditorOutput` 只保存 R2 key 和 session metadata。 | `plugins/image-markup/appscript/webapp.js` |
 | AI 修订图 | Next.js API route 调用 RunningHub；RunningHub 输入图片通过 R2 签名 URL 提供。 | `app/api/image-markup/ai-revision/route.ts` |
@@ -52,7 +52,7 @@ Workspace Add-on CardService
         |
         | OpenLink(sessionId)
         v
-Next.js /image-markup editor
+Next.js /image-markup/editor
         |
         | 上传原图和标注图到 R2，换取短期下载 URL
         v
@@ -142,7 +142,7 @@ v1 只支持 Docs 场景下的两个来源：
 CardService 不直接承载本地文件上传。`本地上传` tab 的按钮先创建一个 `local-upload` session，再通过 `OpenLink` 打开：
 
 ```text
-/image-markup?sessionId=<session-id>&localUpload=1&sourceLabel=Uploaded%20image
+/image-markup/editor?sessionId=<session-id>&localUpload=1&sourceLabel=Uploaded%20image
 ```
 
 本地上传 session 的 `host` 仍为 `docs`，`source.type` 为 `local-upload`。侧边栏或编辑器先把上传图片写入 R2，再把 `r2Key` 写入 session；保存时同样只回传输出对象的 R2 key。
@@ -448,7 +448,7 @@ type AnnotationSession = {
 
 ## 编辑器 UI 要求
 
-在 `/image-markup` 中增加：
+在 `/image-markup/editor` 中增加：
 
 - 顶部来源 tab：
   - `文档图片`
@@ -611,3 +611,4 @@ Docs add-on 卡片也需要在顶部提供来源 tab：
 - RunningHub 图片编辑 API 文档：https://www.runninghub.cn/call-api/api-detail/2046514150500524035
 - RunningHub OpenAPI 文档：https://www.runninghub.cn/runninghub-api-doc-cn/api-448969294
 - 现有 Workspace add-on 规格：`docs/image-annotation-canvas-plugin-spec.md`
+

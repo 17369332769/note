@@ -35,10 +35,10 @@ export const plugins: Plugin[] = [
     ],
     setup: [
       "Set Apps Script script property EDITOR_BASE_URL to the deployed Next.js origin.",
-      "Set Next.js environment variables APPS_SCRIPT_WEBAPP_URL and RUNNINGHUB_API_KEY.",
+      "Set IMAGE_MARKUP_SESSION_EXCHANGE_SECRET in Apps Script and Next.js, set IMAGE_MARKUP_SESSION_SIGNING_SECRET and RUNNINGHUB_API_KEY in Next.js.",
       "Copy the appscript folder into Apps Script or push it with clasp.",
       "Deploy a Workspace Add-on test deployment for Google Docs.",
-      "Open /image-markup from a Docs annotation session to test PNG, revision, and edit brief export.",
+      "Open /image-markup/editor from a Docs annotation session to test PNG, revision, and edit brief export.",
     ],
   },
   {

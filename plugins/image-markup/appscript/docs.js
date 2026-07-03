@@ -275,26 +275,7 @@ function insertIntoDocs(event) {
       throw new Error('Save a marked-up image or clean revision before inserting it into the document.');
     }
 
-    const doc = DocumentApp.openById(session.source.documentId);
-    const body = doc.getBody();
-    const imageBlob = fetchR2Blob_(outputImageR2Key, session.id + '-output.png', 'image/png');
-    const title = session.revisedImageR2Key ? 'Clean revision: ' : 'Marked-up image: ';
-    body.appendParagraph(title + (session.source.label || session.id)).setHeading(DocumentApp.ParagraphHeading.HEADING3);
-    body.appendImage(imageBlob);
-
-    const briefText = session.editBrief
-      ? JSON.stringify(session.editBrief, null, 2)
-      : session.editBriefR2Key
-        ? fetchR2Text_(session.editBriefR2Key)
-        : '';
-    if (briefText) {
-      body.appendParagraph('Edit notes').setHeading(DocumentApp.ParagraphHeading.HEADING4);
-      body.appendParagraph(briefText);
-    }
-
-    session.status = 'inserted';
-    session.updatedAt = new Date().toISOString();
-    saveSession_(session);
+    insertOutputIntoDocs_(session, outputImageR2Key, session.source.label || session.id);
 
     return CardService.newActionResponseBuilder()
       .setNotification(CardService.newNotification().setText(session.revisedImageR2Key ? 'Clean revision inserted into the document.' : 'Marked-up image inserted into the document.'))
@@ -302,6 +283,36 @@ function insertIntoDocs(event) {
   } catch (error) {
     return buildErrorResponse_(error);
   }
+}
+
+/**
+ * Inserts an R2-backed output image into the session's Google Doc.
+ *
+ * @param {Object} session AnnotationSession.
+ * @param {string} outputImageR2Key R2 object key.
+ * @param {string=} label Output label.
+ */
+function insertOutputIntoDocs_(session, outputImageR2Key, label) {
+  const doc = DocumentApp.openById(session.source.documentId);
+  const body = doc.getBody();
+  const imageBlob = fetchR2Blob_(outputImageR2Key, session.id + '-output.png', 'image/png');
+  const title = session.revisedImageR2Key ? 'Generated image: ' : 'Marked-up image: ';
+  body.appendParagraph(title + (label || session.source.label || session.id)).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+  body.appendImage(imageBlob);
+
+  const briefText = session.editBrief
+    ? JSON.stringify(session.editBrief, null, 2)
+    : session.editBriefR2Key
+      ? fetchR2Text_(session.editBriefR2Key)
+      : '';
+  if (briefText) {
+    body.appendParagraph('Edit notes').setHeading(DocumentApp.ParagraphHeading.HEADING4);
+    body.appendParagraph(briefText);
+  }
+
+  session.status = 'inserted';
+  session.updatedAt = new Date().toISOString();
+  saveSession_(session);
 }
 
 /**

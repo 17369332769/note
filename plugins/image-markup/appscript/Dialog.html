@@ -30,7 +30,7 @@
     <script>
       const editorFrame = document.getElementById('image-markup-editor');
       const allowedOrigin = new URL('<?= editorUrl ?>').origin;
-      const allowedActions = ['getSession', 'saveEditorOutput'];
+      const allowedActions = ['getSession', 'saveEditorOutput', 'insertEditorOutput'];
 
       window.addEventListener('message', function (event) {
         if (event.origin !== allowedOrigin) return;

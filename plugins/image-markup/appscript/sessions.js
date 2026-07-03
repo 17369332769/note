@@ -13,11 +13,13 @@ const SESSION_TTL_HOURS = 24;
 function createSessionForSource_(host, source) {
   const sourceLabel = source.filename || source.label || 'workspace-image';
   const id = Utilities.getUuid();
-  const accessToken = Utilities.getUuid();
   const now = new Date().toISOString();
+  const tokenPayload = createHostedSessionToken_(id, host, source, sourceLabel);
+  const accessToken = tokenPayload.sessionToken;
   const session = {
     id: id,
     accessToken: accessToken,
+    accessTokenExpiresAt: tokenPayload.expiresAt,
     userKey: getAnonymousUserKey_(),
     host: host,
     source: source,
@@ -36,6 +38,68 @@ function createSessionForSource_(host, source) {
 
   saveSession_(session);
   return session;
+}
+
+/**
+ * Exchanges a trusted Apps Script session for a hosted editor token.
+ *
+ * @param {string} sessionId Session ID.
+ * @param {string} host Host key.
+ * @param {Object} source Image source.
+ * @param {string} sourceLabel User-facing source label.
+ * @return {{sessionToken:string,expiresAt:string}}
+ */
+function createHostedSessionToken_(sessionId, host, source, sourceLabel) {
+  const exchangeSecret = PropertiesService.getScriptProperties().getProperty('IMAGE_MARKUP_SESSION_EXCHANGE_SECRET');
+  if (!exchangeSecret) {
+    throw new Error('IMAGE_MARKUP_SESSION_EXCHANGE_SECRET is not configured in Apps Script properties.');
+  }
+
+  const response = UrlFetchApp.fetch(getEditorBaseUrl_().replace(/\/+$/, '') + '/api/image-markup/session-token', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'x-image-markup-exchange-secret': exchangeSecret
+    },
+    payload: JSON.stringify({
+      sessionId: sessionId,
+      documentId: source && source.documentId ? String(source.documentId) : '',
+      sourceType: source && source.type ? String(source.type) : host,
+      sourceHash: buildSourceHash_(source),
+      sourceLabel: sourceLabel,
+      expiresInSeconds: 7200
+    }),
+    muteHttpExceptions: true
+  });
+  const status = response.getResponseCode();
+  const json = JSON.parse(response.getContentText() || '{}');
+  if (status < 200 || status >= 300 || !json.ok || !json.sessionToken) {
+    throw new Error(json.error || 'Could not create editing session token.');
+  }
+  return {
+    sessionToken: String(json.sessionToken),
+    expiresAt: json.expiresAt ? String(json.expiresAt) : ''
+  };
+}
+
+/**
+ * Builds a stable non-secret source fingerprint for token metadata.
+ *
+ * @param {Object} source Image source.
+ * @return {string}
+ */
+function buildSourceHash_(source) {
+  const raw = JSON.stringify({
+    type: source && source.type || '',
+    documentId: source && source.documentId || '',
+    imageIndex: source && source.imageIndex !== undefined ? source.imageIndex : '',
+    r2Key: source && source.r2Key || '',
+    width: source && source.width || '',
+    height: source && source.height || '',
+    size: source && source.size || ''
+  });
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw, Utilities.Charset.UTF_8);
+  return Utilities.base64EncodeWebSafe(digest);
 }
 
 /**

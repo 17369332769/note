@@ -37,9 +37,9 @@ pnpm dev:addon
 pnpm dev:drive
 ```
 
-`dev:addon` 会使用 `apptype=addon` 的默认环境，`dev:drive` 会使用 `apptype=drive` 的默认环境；这里的 `drive` 只是网页展示/兼容环境类型，不代表使用 Google Drive API 或 Drive 存储。访问 `/image-markup?apptype=addon` 或 `/image-markup?apptype=drive` 仍然可以覆盖启动默认值。生产构建时使用 `pnpm build:addon` 或 `pnpm build:drive`。
+`dev:addon` 会使用 `apptype=addon` 的默认环境，`dev:drive` 会使用 `apptype=drive` 的默认环境；这里的 `drive` 只是网页展示/兼容环境类型，不代表使用 Google Drive API 或 Drive 存储。访问 `/image-markup/editor?apptype=addon` 或 `/image-markup/editor?apptype=drive` 仍然可以覆盖启动默认值。生产构建时使用 `pnpm build:addon` 或 `pnpm build:drive`。
 
-Apps Script 里的 `Dialog.html` 是稳定的轻量 iframe 壳，通过脚本属性 `EDITOR_BASE_URL` 加载部署后的 `/image-markup` 页面。因此发布网页时只需要运行 Next.js 构建，不需要把 `.next` 产物再复制进 Apps Script。
+Apps Script 里的 `Dialog.html` 是稳定的轻量 iframe 壳，通过脚本属性 `EDITOR_BASE_URL` 加载部署后的 `/image-markup/editor` 页面。因此发布网页时只需要运行 Next.js 构建，不需要把 `.next` 产物再复制进 Apps Script。
 
 ## 常用命令
 

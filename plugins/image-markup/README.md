@@ -14,7 +14,7 @@ plugins/image-markup/
     docs.js
     sessions.js
     webapp.js
-app/image-markup/page.tsx
+app/image-markup/editor/page.tsx
 lib/image-markup/
   aiPrompt.ts
   export.ts
@@ -24,12 +24,21 @@ lib/image-markup/
 ## Setup
 
 1. Deploy the Next.js app and set `EDITOR_BASE_URL` in Apps Script script properties to the deployed origin.
-2. Deploy the Apps Script project as a web app if you need the server-side session proxy, and set `APPS_SCRIPT_WEBAPP_URL` in the Next.js environment to that web app URL.
+2. Set `IMAGE_MARKUP_SESSION_EXCHANGE_SECRET` in both Apps Script script properties and the Next.js server environment. Set `IMAGE_MARKUP_SESSION_SIGNING_SECRET` only in the Next.js server environment.
 3. Set the image generation provider key in the Next.js server environment. Do not store it in Apps Script or browser code.
 4. Configure Cloudflare R2 for image storage. R2 is the storage path for local uploads, annotated images, revised images, and edit brief JSON.
 5. Copy or push `appscript/` into an Apps Script project with `clasp`.
 6. Create a Google Workspace add-on test deployment for Google Docs.
 7. Open the add-on from Docs and test the document-image and local-upload tabs.
+
+Current Apps Script script properties:
+
+```env
+EDITOR_BASE_URL=https://note-bice-seven.vercel.app
+IMAGE_MARKUP_SESSION_EXCHANGE_SECRET=77yejZirm1IN596_CJifqiDDEHUW7VAfHsBviHug84Sv01EKil1kO3Ihb47_GjDx
+```
+
+Do not set `IMAGE_MARKUP_SESSION_SIGNING_SECRET` in Apps Script. It belongs only in the Vercel server environment.
 
 The Apps Script manifest intentionally uses narrow scopes: `documents.currentonly`, `script.container.ui`, `script.external_request`, and `script.locale`. It does not request Drive scopes and does not call Drive APIs.
 
@@ -56,7 +65,17 @@ If browser clients call the Next.js API routes from another origin, configure th
 
 The editor calls `/api/image-markup/ai-revision` from the browser, and that server route calls the configured image provider. API keys must stay in the Next.js server environment.
 
-AI revision requests require the `sessionId` and `sessionToken` created by Apps Script. Before calling the provider, the Next.js route verifies the session through `APPS_SCRIPT_WEBAPP_URL`, so random callers cannot use the public endpoint without a valid editor session.
+AI revision requests require the `sessionId` and signed `sessionToken` created by Apps Script through `/api/image-markup/session-token`. Before calling the provider, the Next.js route verifies that token locally, so the image generation API does not need to call a public Apps Script web app during generation.
+
+```env
+IMAGE_MARKUP_SESSION_EXCHANGE_SECRET=...
+IMAGE_MARKUP_SESSION_SIGNING_SECRET=...
+IMAGE_MARKUP_SESSION_TOKEN_TTL_SECONDS=7200
+IMAGE_MARKUP_AI_SESSION_LIMIT=10
+```
+
+The exchange secret is shared only between Apps Script and Next.js. The signing secret must stay only on Next.js.
+AI revision generation is limited per editing session. The default limit is 10 generations per `sessionId`.
 
 RunningHub remains supported:
 

@@ -7,6 +7,7 @@ import {
 import { createR2DownloadUrl, createR2UploadUrl } from "@/lib/image-markup/r2";
 import { describeRunningHubError, normalizeRunningHubAspectRatio, pickScalarString } from "@/lib/image-markup/runninghub";
 import { assertAiRevisionSessionAccess } from "@/lib/image-markup/sessionAccess";
+import { consumeAiRevisionSessionQuota } from "@/lib/image-markup/sessionRateLimit";
 import type { AiRevisionRequest } from "@/lib/image-markup/types";
 import { jsonWithCors, optionsWithCors } from "../cors";
 
@@ -56,12 +57,42 @@ export async function POST(request: Request) {
     return jsonWithCors({ ok: false, error: validationError }, { status: 400 });
   }
 
+  let tokenClaims: Awaited<ReturnType<typeof assertAiRevisionSessionAccess>> | null = null;
   try {
-    await assertAiRevisionSessionAccess(payload);
+    tokenClaims = await assertAiRevisionSessionAccess(payload);
   } catch (error) {
     return jsonWithCors(
       { ok: false, error: error instanceof Error ? error.message : "Invalid editing session." },
       { status: 403 },
+    );
+  }
+
+  try {
+    const quota = await consumeAiRevisionSessionQuota({
+      sessionId: payload.sessionId,
+      resetAt: tokenClaims?.exp ? new Date(tokenClaims.exp * 1000).toISOString() : undefined,
+    });
+    if (!quota.allowed) {
+      return jsonWithCors(
+        {
+          ok: false,
+          error: `This editing session has reached the ${quota.limit} generation limit.`,
+          limit: quota.limit,
+          remaining: quota.remaining,
+          resetAt: quota.resetAt,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.max(60, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000))),
+          },
+        },
+      );
+    }
+  } catch (error) {
+    return jsonWithCors(
+      { ok: false, error: error instanceof Error ? error.message : "Could not verify generation limit." },
+      { status: 503 },
     );
   }
 
