@@ -84,7 +84,7 @@ export async function createOrGetAiRevisionJob(input: {
       on conflict (session_id, request_id) do nothing
       returning *, true as created
     )
-    select *, created from inserted
+    select * from inserted
     union all
     select *, false as created
     from image_markup_ai_revision_jobs

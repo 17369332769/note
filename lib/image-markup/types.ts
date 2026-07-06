@@ -52,7 +52,6 @@ export type EditBrief = {
 
 export type AiRevisionMetadata = {
   provider: "runninghub";
-  taskId: string;
   promptVersion: "image-markup-ai-edit-v1";
   promptHash: string;
   resolution: string;

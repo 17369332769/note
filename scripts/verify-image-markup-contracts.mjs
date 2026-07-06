@@ -98,6 +98,7 @@ assert.match(aiRoute, /createOrGetAiRevisionJob/, "AI revision route must dedupe
 assert.match(aiRoute, /markAiRevisionJobPending/, "AI revision route must persist provider task ids");
 assert.match(aiRoute, /queryRunningHubTask/, "AI revision polling must query RunningHub task status");
 assert.match(aiRoute, /status:\s*202/, "AI revision route must return pending jobs without holding the request open");
+assert.doesNotMatch(aiRoute, /taskId:\s*job\.taskId/, "AI revision responses must expose jobId only, not provider taskId");
 assert.doesNotMatch(aiRoute, /imgv2|IMGV2|IMAGE_GENERATION_PROVIDER|createImgv2/, "AI revision route must be RunningHub-only");
 assert.doesNotMatch(
   aiRoute,
@@ -166,10 +167,25 @@ assert.match(manifest, /documents\.currentonly/);
 assert.doesNotMatch(manifest, /drive\.file/, "Docs-only v1 should not request Drive scope");
 assert.doesNotMatch(manifest, /presentations\.currentonly/, "Docs-only v1 must not request Slides scope");
 
+const appsScriptCode = read("plugins/image-markup/appscript/Code.js");
+assert.match(appsScriptCode, /https:\/\/www\.addlet\.pro/, "Apps Script editor URL should use the canonical addlet.pro domain");
+assert.doesNotMatch(appsScriptCode, new RegExp("EDITOR" + "_BASE_URL"), "Apps Script editor URL should not require an editor URL property");
+
+const docsCode = read("plugins/image-markup/appscript/docs.js");
+assert.doesNotMatch(docsCode, /DocumentApp\.openById/, "Docs-only add-on must use the current document scope instead of opening arbitrary Docs by id");
+
 const sessions = read("plugins/image-markup/appscript/sessions.js");
 assert.doesNotMatch(sessions, /getImageUrlBlob_|getSlidesImageBlob_|getDriveImageBlob_/, "Docs-only session routing must not call unsupported source loaders");
 assert.match(sessions, /createHostedSessionToken_/, "Apps Script must exchange trusted sessions for hosted AI tokens");
 assert.match(sessions, /IMAGE_MARKUP_SESSION_EXCHANGE_SECRET/, "Apps Script must use the shared exchange secret");
+assert.doesNotMatch(
+  sessions,
+  /setProperty\(SESSION_RECORD_PREFIX\s*\+\s*session\.id/,
+  "Apps Script sessions should reuse the session list instead of creating one ScriptProperty per session",
+);
+assert.doesNotMatch(sessions, /SESSION_RECORD_PREFIX/, "Apps Script sessions should not keep legacy per-session property keys");
+assert.doesNotMatch(sessions, /getLegacySessionRecord_/, "Apps Script sessions should not fall back to legacy per-session records");
+assert.doesNotMatch(sessions, /deleteLegacySessionRecord_/, "Apps Script sessions should not touch legacy per-session records");
 
 const webapp = read("plugins/image-markup/appscript/webapp.js");
 assert.match(webapp, /runImageMarkupBridgeAction/);
@@ -190,6 +206,10 @@ assert.match(editorShell, /insertEditorOutput/);
 
 const aiTypes = read("lib/image-markup/types.ts");
 assert.doesNotMatch(aiTypes, new RegExp("imgv2|modelConfigKey|originalImage" + "DataUrl|annotatedImage" + "DataUrl"));
+assert.doesNotMatch(aiTypes, /taskId:\s*string/, "Public AI revision types must not expose provider taskId");
+
+const aiJobs = read("lib/image-markup/aiRevisionJobs.ts");
+assert.doesNotMatch(aiJobs, /select \*, created from inserted/, "AI job idempotency query must not duplicate the created column");
 
 const pluginReadme = read("plugins/image-markup/README.md");
 assert.doesNotMatch(pluginReadme, /ImgV2|IMGV2|IMAGE_GENERATION_PROVIDER|IMAGE_GENERATION_API_KEY/);

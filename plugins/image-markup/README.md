@@ -23,7 +23,7 @@ lib/image-markup/
 
 ## Setup
 
-1. Deploy the Next.js app and set `EDITOR_BASE_URL` in Apps Script script properties to the deployed origin.
+1. Deploy the Next.js app at `https://www.addlet.pro`.
 2. Set `IMAGE_MARKUP_SESSION_EXCHANGE_SECRET` in both Apps Script script properties and the Next.js server environment. Set `IMAGE_MARKUP_SESSION_SIGNING_SECRET` only in the Next.js server environment.
 3. Set the RunningHub API key in the Next.js server environment. Do not store it in Apps Script or browser code.
 4. Configure Neon Postgres for structured state such as AI generation quota.
@@ -35,7 +35,6 @@ lib/image-markup/
 Current Apps Script script properties:
 
 ```env
-EDITOR_BASE_URL=https://www.addlet.pro
 IMAGE_MARKUP_SESSION_EXCHANGE_SECRET=...
 ```
 

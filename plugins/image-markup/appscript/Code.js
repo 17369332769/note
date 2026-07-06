@@ -227,13 +227,12 @@ function buildErrorResponse_(error) {
 }
 
 /**
- * Returns the editor origin configured for this deployment.
+ * Returns the canonical editor origin for this deployment.
  *
  * @return {string}
  */
 function getEditorBaseUrl_() {
-  const configured = PropertiesService.getScriptProperties().getProperty('EDITOR_BASE_URL');
-  return configured || 'https://www.addlet.pro';
+  return 'https://www.addlet.pro';
 }
 
 /**

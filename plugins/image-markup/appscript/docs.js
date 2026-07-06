@@ -241,10 +241,7 @@ function walkDocsElement_(element, visitor) {
  * @return {Blob}
  */
 function getDocsImageBlob_(source) {
-  const activeDoc = DocumentApp.getActiveDocument();
-  const doc = activeDoc && activeDoc.getId && activeDoc.getId() === source.documentId
-    ? activeDoc
-    : DocumentApp.openById(source.documentId);
+  const doc = getCurrentDocsDocumentForSource_(source);
   const images = [];
 
   walkDocsElement_(doc.getBody(), function (element) {
@@ -293,7 +290,7 @@ function insertIntoDocs(event) {
  * @param {string=} label Output label.
  */
 function insertOutputIntoDocs_(session, outputImageR2Key, label) {
-  const doc = DocumentApp.openById(session.source.documentId);
+  const doc = getCurrentDocsDocumentForSource_(session.source);
   const body = doc.getBody();
   const imageBlob = fetchR2Blob_(outputImageR2Key, session.id + '-output.png', 'image/png');
   const title = session.revisedImageR2Key ? 'Generated image: ' : 'Marked-up image: ';
@@ -313,6 +310,25 @@ function insertOutputIntoDocs_(session, outputImageR2Key, label) {
   session.status = 'inserted';
   session.updatedAt = new Date().toISOString();
   saveSession_(session);
+}
+
+/**
+ * Returns the current Docs document when it matches the session source.
+ *
+ * @param {Object} source ImageSource.
+ * @return {GoogleAppsScript.Document.Document}
+ */
+function getCurrentDocsDocumentForSource_(source) {
+  const doc = DocumentApp.getActiveDocument();
+  if (!doc) {
+    throw new Error('Open the source Google Doc, then try again.');
+  }
+
+  if (source && source.documentId && doc.getId() !== source.documentId) {
+    throw new Error('Open the source Google Doc for this image, then try again.');
+  }
+
+  return doc;
 }
 
 /**

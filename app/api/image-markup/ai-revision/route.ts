@@ -239,7 +239,6 @@ function toJobResponse(job: AiRevisionJob) {
     status: job.status === "completed" ? "completed" : job.status === "failed" ? "failed" : "pending",
     jobId: job.jobId,
     provider: job.provider,
-    taskId: job.taskId,
     promptVersion: job.promptVersion,
     promptHash: job.promptHash,
     resolution: job.resolution,

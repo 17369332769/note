@@ -1,7 +1,7 @@
 const SESSION_STORE_KEY = 'annotationSessions';
-const SESSION_RECORD_PREFIX = 'annotationSession:';
 const ANONYMOUS_USER_KEY = 'anonymousUserKey';
 const SESSION_TTL_HOURS = 24;
+const SESSION_LIST_LIMIT = 20;
 
 /**
  * Creates a session and returns editor metadata.
@@ -142,14 +142,12 @@ function normalizePluginAppType_(appType) {
  * @param {Object} session AnnotationSession.
  */
 function saveSession_(session) {
-  PropertiesService.getScriptProperties().setProperty(SESSION_RECORD_PREFIX + session.id, JSON.stringify(session));
-
   const sessions = listSessions_().filter(function (item) {
     return item.id !== session.id;
   });
   sessions.unshift(session);
 
-  PropertiesService.getUserProperties().setProperty(SESSION_STORE_KEY, JSON.stringify(sessions.slice(0, 20)));
+  PropertiesService.getUserProperties().setProperty(SESSION_STORE_KEY, JSON.stringify(sessions.slice(0, SESSION_LIST_LIMIT)));
 }
 
 /**
@@ -188,20 +186,6 @@ function listRecentSessions_() {
  * @return {Object|null}
  */
 function getSession_(sessionId) {
-  const raw = PropertiesService.getScriptProperties().getProperty(SESSION_RECORD_PREFIX + sessionId);
-  if (raw) {
-    try {
-      const session = JSON.parse(raw);
-      if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
-        PropertiesService.getScriptProperties().deleteProperty(SESSION_RECORD_PREFIX + sessionId);
-        return null;
-      }
-      return session;
-    } catch (error) {
-      return null;
-    }
-  }
-
   const sessions = listSessions_();
   for (let index = 0; index < sessions.length; index += 1) {
     if (sessions[index].id === sessionId) return sessions[index];
