@@ -25,17 +25,18 @@ lib/image-markup/
 
 1. Deploy the Next.js app and set `EDITOR_BASE_URL` in Apps Script script properties to the deployed origin.
 2. Set `IMAGE_MARKUP_SESSION_EXCHANGE_SECRET` in both Apps Script script properties and the Next.js server environment. Set `IMAGE_MARKUP_SESSION_SIGNING_SECRET` only in the Next.js server environment.
-3. Set the image generation provider key in the Next.js server environment. Do not store it in Apps Script or browser code.
-4. Configure Cloudflare R2 for image storage. R2 is the storage path for local uploads, annotated images, revised images, and edit brief JSON.
-5. Copy or push `appscript/` into an Apps Script project with `clasp`.
-6. Create a Google Workspace add-on test deployment for Google Docs.
-7. Open the add-on from Docs and test the document-image and local-upload tabs.
+3. Set the RunningHub API key in the Next.js server environment. Do not store it in Apps Script or browser code.
+4. Configure Neon Postgres for structured state such as AI generation quota.
+5. Configure Cloudflare R2 for image storage. R2 is the storage path for local uploads, annotated images, revised images, and edit brief JSON.
+6. Copy or push `appscript/` into an Apps Script project with `clasp`.
+7. Create a Google Workspace add-on test deployment for Google Docs.
+8. Open the add-on from Docs and test the document-image and local-upload tabs.
 
 Current Apps Script script properties:
 
 ```env
-EDITOR_BASE_URL=https://note-bice-seven.vercel.app
-IMAGE_MARKUP_SESSION_EXCHANGE_SECRET=77yejZirm1IN596_CJifqiDDEHUW7VAfHsBviHug84Sv01EKil1kO3Ihb47_GjDx
+EDITOR_BASE_URL=https://www.addlet.pro
+IMAGE_MARKUP_SESSION_EXCHANGE_SECRET=...
 ```
 
 Do not set `IMAGE_MARKUP_SESSION_SIGNING_SECRET` in Apps Script. It belongs only in the Vercel server environment.
@@ -61,9 +62,32 @@ The editor backend exposes:
 
 If browser clients call the Next.js API routes from another origin, configure the app origin CORS policy accordingly. The browser uploads images through the Next.js API rather than directly to R2.
 
+## Neon Postgres configuration
+
+Create a Neon database and add its pooled connection string to the Next.js server environment:
+
+```env
+DATABASE_URL=postgresql://...
+```
+
+The AI revision route creates this table automatically if it does not exist:
+
+```sql
+create table if not exists image_markup_ai_session_usage (
+  session_id text primary key,
+  generation_count integer not null default 0,
+  generation_limit integer not null default 10,
+  reset_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+```
+
+`DATABASE_URL` is required for AI revision generation. There is no R2 fallback for generation quota.
+
 ## Image generation configuration
 
-The editor calls `/api/image-markup/ai-revision` from the browser, and that server route calls the configured image provider. API keys must stay in the Next.js server environment.
+The editor calls `/api/image-markup/ai-revision` from the browser, and that server route creates and polls RunningHub tasks. API keys must stay in the Next.js server environment.
 
 AI revision requests require the `sessionId` and signed `sessionToken` created by Apps Script through `/api/image-markup/session-token`. Before calling the provider, the Next.js route verifies that token locally, so the image generation API does not need to call a public Apps Script web app during generation.
 
@@ -77,27 +101,13 @@ IMAGE_MARKUP_AI_SESSION_LIMIT=10
 The exchange secret is shared only between Apps Script and Next.js. The signing secret must stay only on Next.js.
 AI revision generation is limited per editing session. The default limit is 10 generations per `sessionId`.
 
-RunningHub remains supported:
+RunningHub configuration:
 
 ```env
-IMAGE_GENERATION_PROVIDER=runninghub
 RUNNINGHUB_API_KEY=...
 RUNNINGHUB_IMAGE_EDIT_URL=https://www.runninghub.cn/openapi/v2/rhart-image-g-2-official/image-to-image
 RUNNINGHUB_QUERY_URL=https://www.runninghub.cn/openapi/v2/query
 ```
-
-ImgV2 / aiapis can be selected with:
-
-```env
-IMAGE_GENERATION_PROVIDER=imgv2
-IMGV2_API_KEY=...
-IMGV2_IMAGE_GENERATION_URL=https://imgv2.aiapis.help/v1/images/generations
-IMGV2_IMAGE_MODEL=gpt-image-2
-IMGV2_IMAGE_MODEL_CONFIG_KEY=gpt-image-2-[c4k]
-IMGV2_IMAGE_SIZE=4k
-```
-
-For compatibility, `IMAGE_GENERATION_API_KEY`, `IMAGE_GENERATION_MODEL`, `IMAGE_GENERATION_MODEL_CONFIG_KEY`, and `IMAGE_GENERATION_SIZE` are also accepted aliases for the ImgV2 settings.
 
 ## Manual Test Checklist
 

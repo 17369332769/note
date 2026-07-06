@@ -19,18 +19,18 @@ export const plugins: Plugin[] = [
     slug: "image-markup",
     name: "Image Markup",
     tagline: "Mark up Google Docs images and generate clean AI revisions.",
-    status: "prototype",
+    status: "ready",
     hosts: ["Docs"],
     iconPath: "/plugins/image-markup/icon.png",
     summary:
-      "A Google Docs add-on prototype that scans inline images or starts a local-upload session, opens an external canvas editor, saves annotated PNGs and edit briefs to Drive, and can call RunningHub to create clean revised images.",
+      "A Google Docs add-on that scans inline images or starts a local-upload session, opens an external canvas editor, exports annotated PNGs and edit briefs, and can generate clean revised images.",
     audience: "Docs users who need to mark image edits with arrows, boxes, notes, and then insert a clean AI-revised copy back into the document.",
     appScriptPath: "plugins/image-markup/appscript",
     features: [
       "Docs inline image scanning with stable generated labels",
       "Local image upload from the external editor",
       "External canvas editor with freehand, arrow, rectangle, and text tools",
-      "RunningHub image-to-image revision flow with fixed 1k low quality",
+      "AI image-to-image revision flow for clean output images",
       "Recent sessions plus Docs insert actions for annotated or revised copies",
     ],
     setup: [

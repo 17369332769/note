@@ -2,6 +2,7 @@
 .log/
 .agents/
 .codex/
+.tmp/
 node_modules/
 dist/
 coverage/

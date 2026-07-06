@@ -31,7 +31,6 @@ body {
   font-family:
     var(--font-inter),
     Arial,
-    "Microsoft YaHei",
     sans-serif;
 }
 
@@ -76,10 +75,9 @@ main {
     var(--font-lexend),
     var(--font-inter),
     Arial,
-    "Microsoft YaHei",
     sans-serif;
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 1.18rem;
+  font-weight: 400;
 }
 
 .brand__mark,
@@ -170,10 +168,9 @@ h1 {
     var(--font-lexend),
     var(--font-inter),
     Arial,
-    "Microsoft YaHei",
     sans-serif;
   font-size: clamp(2.45rem, 5.1vw, 5rem);
-  font-weight: 760;
+  font-weight: 560;
   line-height: 1.03;
   letter-spacing: 0;
 }
@@ -188,26 +185,14 @@ h1 span {
   font-size: clamp(2rem, 4.2vw, 4rem);
 }
 
-.product-page--image-markup h2,
-.product-page--image-markup h3,
-.product-page--image-markup .action-card strong,
-.product-page--image-markup .step-card > span,
-.product-page--image-markup .feature,
-.product-page--image-markup .faq-item h3 {
+.action-card strong,
+.step-card > span,
+.feature,
+.faq-item h3 {
   font-weight: 400;
 }
 
-.product-page--image-markup .detail-hero h1,
-.product-page--image-markup .detail-title__tagline {
-  font-weight: 560;
-}
-
-.product-page--image-markup .site-header .brand {
-  font-size: 1.18rem;
-  font-weight: 400;
-}
-
-.product-page--image-markup .button {
+.button {
   min-height: 38px;
   padding: 0 14px;
   font-size: 0.9rem;
@@ -220,10 +205,9 @@ h2 {
     var(--font-lexend),
     var(--font-inter),
     Arial,
-    "Microsoft YaHei",
     sans-serif;
   font-size: clamp(2rem, 3.5vw, 3.25rem);
-  font-weight: 720;
+  font-weight: 400;
   line-height: 1.08;
   letter-spacing: 0;
 }
@@ -235,9 +219,9 @@ h3 {
     var(--font-lexend),
     var(--font-inter),
     Arial,
-    "Microsoft YaHei",
     sans-serif;
   font-size: 1.35rem;
+  font-weight: 400;
   line-height: 1.2;
   letter-spacing: 0;
 }

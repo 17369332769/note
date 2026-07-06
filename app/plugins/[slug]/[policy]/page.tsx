@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props) {
   const document = getPolicyDocument(plugin, policy);
 
   return {
-    title: `${document.title} | Workspace Add-ons Lab`,
+    title: `${document.title} | Addlet`,
     description: document.summary,
   };
 }
@@ -42,14 +42,14 @@ export default async function PluginPolicyPage({ params }: Props) {
   return (
     <main>
       <header className="site-header">
-        <Link className="brand" href="/" aria-label="Workspace Add-ons Lab">
+        <Link className="brand" href="/" aria-label="Addlet">
           <span className="brand__mark">
             <Blocks size={19} aria-hidden="true" />
           </span>
-          <span>Workspace Add-ons Lab</span>
+          <span>Addlet</span>
         </Link>
         <nav className="nav-links" aria-label={`${plugin.name} policy navigation`}>
-          <Link href={`/plugins/${plugin.slug}`}>插件介绍</Link>
+          <Link href={`/plugins/${plugin.slug}`}>Product</Link>
           {siblingPolicies.map((item) => (
             <Link href={getPolicyHref(plugin.slug, item)} key={item}>
               {getPolicyLabel(item)}
@@ -57,14 +57,14 @@ export default async function PluginPolicyPage({ params }: Props) {
           ))}
         </nav>
         <Link className="button button--primary header-cta" href={`/plugins/${plugin.slug}`}>
-          返回插件页
+          Back to Product
         </Link>
       </header>
 
       <section className="policy-hero">
         <Link className="back-link" href={`/plugins/${plugin.slug}`}>
           <ArrowLeft size={18} />
-          返回 {plugin.name}
+          Back to {plugin.name}
         </Link>
         <p className="eyebrow">{document.eyebrow}</p>
         <h1>
@@ -98,11 +98,11 @@ export default async function PluginPolicyPage({ params }: Props) {
       </section>
 
       <footer className="footer">
-        <Link className="brand" href="/" aria-label="Workspace Add-ons Lab">
+        <Link className="brand" href="/" aria-label="Addlet">
           <span className="brand__mark">
             <Blocks size={19} aria-hidden="true" />
           </span>
-          <span>Workspace Add-ons Lab</span>
+          <span>Addlet</span>
         </Link>
         <nav className="footer-links" aria-label={`${plugin.name} legal links`}>
           {policyKinds.map((item) => (

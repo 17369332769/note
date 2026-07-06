@@ -13,8 +13,8 @@ const lexend = Lexend({
 });
 
 export const metadata: Metadata = {
-  title: "Workspace Add-ons Lab",
-  description: "A Next.js catalog and Apps Script workspace for Google Workspace add-ons.",
+  title: "Addlet | Image Markup for Google Docs",
+  description: "Addlet builds Image Markup, a Google Docs add-on for visual image notes and clean AI revisions.",
 };
 
 export default function RootLayout({
@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="en">
       <body className={`${inter.variable} ${lexend.variable}`}>{children}</body>
     </html>
   );

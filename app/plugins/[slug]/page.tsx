@@ -23,45 +23,45 @@ type Props = {
 const imageMarkupActions = [
   {
     icon: ImageIcon,
-    title: "选择 Docs 图片",
-    description: "从 Google Docs 侧边栏扫描内嵌图片，或在编辑器里上传本地图片。",
+    title: "Select a Docs Image",
+    description: "Scan inline images from the Google Docs sidebar or upload a local image in the editor.",
   },
   {
     icon: Pencil,
-    title: "标出修改意见",
-    description: "使用画笔、箭头、矩形和文字说明，把想改的位置说清楚。",
+    title: "Mark the Requested Edit",
+    description: "Use freehand marks, arrows, boxes, and text notes to show exactly what should change.",
   },
   {
     icon: Wand2,
-    title: "生成干净修订图",
-    description: "保留标注版做沟通凭证，同时生成可插回文档的 clean revision。",
+    title: "Create a Clean Revision",
+    description: "Keep the annotated image for review and generate a clean revision for the document when needed.",
   },
 ] as const;
 
 const imageMarkupFaqs = [
   {
-    question: "Image Markup 和普通截图标注有什么不同？",
-    answer: "它面向 Google Docs 图片工作流：可以从文档侧边栏创建会话，保存标注 PNG 和编辑说明，并把修订图插回文档。",
+    question: "How is Image Markup different from screenshot annotation?",
+    answer: "It is built for Google Docs image workflows: create a session from the Docs sidebar, save annotated PNGs and edit briefs, and insert revised images back into the document.",
   },
   {
-    question: "现在支持哪些标注工具？",
-    answer: "当前支持选择、自由画笔、箭头、矩形高亮和文字备注，也支持撤销、重做、缩放和 PNG 下载。",
+    question: "Which annotation tools are supported?",
+    answer: "Image Markup supports selection, freehand drawing, arrows, box highlights, text notes, undo, redo, zoom, and PNG export.",
   },
   {
-    question: "AI 修订图是怎么生成的？",
-    answer: "编辑器会把原图、标注图和结构化 edit brief 一起提交给后端，再通过 RunningHub 流程生成干净版本。",
+    question: "How are AI revisions generated?",
+    answer: "When you request an AI revision, the editor sends the original image, annotated image, and structured edit brief to the backend and uses the configured image generation service to create a clean version.",
   },
   {
-    question: "可以不从 Docs 打开吗？",
-    answer: "可以。你可以直接打开编辑器上传 PNG、JPEG 或 WebP 图片，完成标注、下载和 AI 修订。",
+    question: "Can I use it without opening Google Docs?",
+    answer: "Yes. You can open the editor directly, upload a PNG, JPEG, or WebP image, then annotate, download, or generate a revision.",
   },
   {
-    question: "图片会一直保存吗？",
-    answer: "图片仅用于你发起的标注、导出和修订流程。具体保存时间与部署环境、存储配置和隐私政策一致。",
+    question: "Are images stored permanently?",
+    answer: "Images are used only for the annotation, export, and revision workflows you start. Temporary images are normally deleted or expired within 30 days. See the privacy policy for details.",
   },
   {
-    question: "适合什么用户？",
-    answer: "适合需要在文档里沟通图片修改意见、生成干净修订图，并保留编辑依据的 Docs 用户和内容团队。",
+    question: "Who is Image Markup for?",
+    answer: "It is for Docs users and content teams that need to explain image edits, generate clean revised images, and keep a clear review artifact.",
   },
 ];
 
@@ -79,7 +79,7 @@ export function generatePluginMetadata(plugin: NonNullable<ReturnType<typeof get
   }
 
   return {
-    title: `${plugin.name} | Workspace Add-ons Lab`,
+    title: `${plugin.name} | Addlet`,
     description: plugin.summary,
     icons: plugin.iconPath ? [{ url: plugin.iconPath }] : undefined,
   };
@@ -102,18 +102,18 @@ function getDetailActions(plugin: NonNullable<ReturnType<typeof getPlugin>>) {
   return [
     {
       icon: Blocks,
-      title: "理解场景",
+      title: "Understand the Workflow",
       description: plugin.audience,
     },
     {
       icon: FileCode2,
-      title: "复制脚本",
-      description: `Apps Script 模板保存在 ${plugin.appScriptPath}。`,
+      title: "Review the Implementation",
+      description: `Apps Script implementation files are stored in ${plugin.appScriptPath}.`,
     },
     {
       icon: Sparkles,
-      title: "继续扩展",
-      description: "按 README 和 setup 步骤补齐业务能力，再发布到 Workspace。",
+      title: "Continue Setup",
+      description: "Use the README and setup steps to finish configuration before publishing to Workspace.",
     },
   ] as const;
 }
@@ -123,16 +123,16 @@ function getDetailFaqs(plugin: NonNullable<ReturnType<typeof getPlugin>>) {
 
   return [
     {
-      question: `${plugin.name} 现在是什么状态？`,
-      answer: `当前状态是 ${plugin.status}，适合从现有 Apps Script 模板继续开发。`,
+      question: `What is the current status of ${plugin.name}?`,
+      answer: `Current status: ${plugin.status}.`,
     },
     {
-      question: "支持哪些 Google Workspace 主应用？",
-      answer: `当前覆盖 ${plugin.hosts.join("、")}。`,
+      question: "Which Google Workspace hosts are supported?",
+      answer: `Current hosts: ${plugin.hosts.join(", ")}.`,
     },
     {
-      question: "脚本代码在哪里？",
-      answer: `脚本目录是 ${plugin.appScriptPath}。`,
+      question: "Where is the Apps Script implementation?",
+      answer: `The Apps Script directory is ${plugin.appScriptPath}.`,
     },
   ];
 }
@@ -160,17 +160,17 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
           <span>{plugin.name}</span>
         </Link>
         <nav className="nav-links" aria-label={`${plugin.name} page navigation`}>
-          <a href="#features">功能</a>
-          <a href={isImageMarkup ? "#how-it-works" : "#setup"}>{isImageMarkup ? "使用方式" : "安装"}</a>
+          <a href="#features">Features</a>
+          <a href={isImageMarkup ? "#how-it-works" : "#setup"}>{isImageMarkup ? "How It Works" : "Setup"}</a>
           <a href="#faq">FAQ</a>
         </nav>
         {isImageMarkup ? (
           <Link className="button button--primary header-cta" href={editorHref}>
-            打开编辑器
+            Open Editor
           </Link>
         ) : (
           <Link className="button button--primary header-cta" href="/">
-            返回首页
+            Back Home
           </Link>
         )}
       </header>
@@ -206,17 +206,17 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
           {isImageMarkup ? (
             <Link className="button button--primary" href={editorHref}>
               <MousePointer2 size={18} />
-              打开标注编辑器
+              Open Annotation Editor
             </Link>
           ) : (
             <a className="button" href={`#${plugin.slug}-script`}>
               <FileCode2 size={18} />
-              查看脚本目录
+              View Script Directory
             </a>
           )}
           <a className="button" href="#features">
             <ArrowUpRight size={18} />
-            了解功能
+            View Features
           </a>
         </div>
         {isImageMarkup ? null : (
@@ -246,10 +246,10 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
       <section className="section" id="features" aria-label={`${plugin.name} features`}>
         <div className="section__header section__header--center">
           {isImageMarkup ? null : <p className="eyebrow">Product Flow</p>}
-          <h2>{isImageMarkup ? "从图片标注到干净修订图" : "从文档图片到干净修订图"}</h2>
+          <h2>{isImageMarkup ? "From visual markup to clean revision" : "From document image to clean revision"}</h2>
           <p>
             {isImageMarkup
-              ? "Image Markup 帮你把视觉修改意见直接画在图片上，减少来回解释，并把标注稿和干净版本分别交付给文档工作流。"
+              ? "Image Markup lets you draw visual feedback directly on an image, reduce back-and-forth, and keep both the annotated handoff and the clean final image in your document workflow."
               : plugin.audience}
           </p>
         </div>
@@ -257,9 +257,9 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
         <div className="feature-showcase">
           <article className="feature-row">
             <div className="feature-copy">
-              <h3>选择图片，马上进入标注</h3>
+              <h3>Select an image and start marking</h3>
               <p>
-                从 Google Docs 里选择要修改的图片，或者直接上传本地图片。进入编辑器后，所有标注都围绕当前图片展开，不需要额外整理说明文档。
+                Choose the image you want to edit from Google Docs, or upload a local image directly. The editor keeps every note anchored to the current image, so you do not need a separate instruction document.
               </p>
             </div>
             <div className="product-preview product-preview--blue">
@@ -280,9 +280,9 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
 
           <article className="feature-row feature-row--reverse">
             <div className="feature-copy">
-              <h3>用视觉标注替代冗长描述</h3>
+              <h3>Use visual markup instead of long explanations</h3>
               <p>
-                用画笔圈出区域、用箭头指向问题、用矩形框住重点，再加上简短文字。对方看到图片就能理解哪里要改、怎么改。
+                Circle an area with freehand marks, point to issues with arrows, frame important regions with boxes, and add short text notes. Reviewers can understand the requested change by looking at the image.
               </p>
             </div>
             <div className="product-preview product-preview--green">
@@ -297,9 +297,9 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
 
           <article className="feature-row">
             <div className="feature-copy">
-              <h3>同时保留标注稿和干净版本</h3>
+              <h3>Keep both the annotated handoff and the clean version</h3>
               <p>
-                下载带标注的 PNG 作为沟通依据，也可以生成去掉标注后的 clean revision。修改说明清楚，最终图片也干净。
+                Download the annotated PNG as the review artifact, then generate a clean revision when you need the final image without visible markup.
               </p>
             </div>
             <div className="product-preview product-preview--amber">
@@ -315,7 +315,7 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
 
       <section className="section section--soft" id={isImageMarkup ? "how-it-works" : "setup"}>
         <div className="section__header">
-          <h2>{isImageMarkup ? "三步完成图片修改沟通" : "部署和开发步骤"}</h2>
+          <h2>{isImageMarkup ? "Complete image review in three steps" : "Setup and development steps"}</h2>
         </div>
         <div className="step-grid">
           {(isImageMarkup
@@ -331,15 +331,15 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
               <h3>
                 {isImageMarkup
                   ? index === 0
-                    ? "打开图片"
+                    ? "Open an Image"
                     : index === 1
-                      ? "画出修改点"
-                      : "导出或生成"
+                      ? "Mark the Edit"
+                      : "Export or Generate"
                   : index === 0
-                    ? "配置脚本"
+                    ? "Configure Scripts"
                     : index === 1
-                      ? "连接服务"
-                      : "测试插件"}
+                      ? "Connect Services"
+                      : "Test the Add-on"}
               </h3>
               <p>{step}</p>
             </article>
@@ -350,7 +350,7 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
       {isImageMarkup ? (
         <section className="section" id="outputs">
           <div className="section__header section__header--center">
-            <h2>清楚表达修改，也保留最终图片</h2>
+            <h2>Make feedback clear and keep the final image clean</h2>
           </div>
           <div className="feature-grid">
             {[
@@ -370,7 +370,7 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
         <section className="section" id={`${plugin.slug}-script`}>
           <div className="section__header section__header--center">
             <p className="eyebrow">Apps Script</p>
-            <h2>脚本目录和功能骨架</h2>
+            <h2>Script Directory and Feature Structure</h2>
           </div>
           <div className="script-layout">
             <div className="code-panel">
@@ -393,7 +393,7 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
 
       <section className="section section--soft" id="faq">
         <div className="section__header">
-          <h2>常见问题</h2>
+          <h2>Frequently Asked Questions</h2>
         </div>
         <div className="faq-grid">
           {detailFaqs.map((item) => (

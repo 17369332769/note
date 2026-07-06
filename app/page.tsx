@@ -3,76 +3,74 @@ import Image from "next/image";
 import {
   ArrowUpRight,
   Blocks,
-  CalendarCheck,
   CheckCircle2,
   FileCode2,
   Image as ImageIcon,
-  Mic,
   Sparkles,
-  Table2,
+  Wand2,
 } from "lucide-react";
 import { plugins } from "@/lib/plugins";
 
 const featuredActions = [
   {
     icon: ImageIcon,
-    title: "Docs 图片标注",
-    description: "选中图片、添加批注，并生成干净的 AI 修订版本。",
+    title: "Select a Docs image",
+    description: "Start from an inline Google Docs image or upload a local PNG, JPEG, or WebP.",
     href: "/image-markup",
   },
   {
-    icon: CalendarCheck,
-    title: "会议纪要助手",
-    description: "把日历上下文转成结构化 Docs 议程、纪要和行动项。",
-    href: "/plugins/meeting-notes",
+    icon: FileCode2,
+    title: "Mark the exact edit",
+    description: "Use arrows, boxes, freehand notes, and text callouts to make image feedback clear.",
+    href: "/plugins/image-markup",
   },
   {
-    icon: Table2,
-    title: "表格清理工具",
-    description: "为 Sheets 用户提供一键清理、规范化和导出准备。",
-    href: "/plugins/sheet-cleanup",
+    icon: Wand2,
+    title: "Export clean outputs",
+    description: "Download the annotated PNG or generate a clean AI revision for your document.",
+    href: "/image-markup/editor",
   },
 ] as const;
 
 const workflowSteps = [
   {
-    title: "选择插件模板",
-    description: "从插件目录进入对应详情页，确认适配的 Workspace 主应用和使用场景。",
+    title: "Open Image Markup",
+    description: "Launch the editor from Google Docs or use the browser editor for a local image.",
   },
   {
-    title: "复制 Apps Script",
-    description: "每个插件目录都保留 manifest、脚本文件和部署说明，方便直接推送到 Apps Script。",
+    title: "Add visual feedback",
+    description: "Draw directly on the image so reviewers can see exactly what should change.",
   },
   {
-    title: "上线你的入口页",
-    description: "在 Next.js 中维护官网介绍、插件索引和外部编辑器页面，让演示与发布保持一致。",
+    title: "Return to your workflow",
+    description: "Export the annotated image, generate a clean revision, and continue in Google Docs.",
   },
 ];
 
 const faqs = [
   {
-    question: "这个网站主要展示什么？",
-    answer: "它是 Google Workspace 插件实验室的官网和文档入口，用来集中展示插件、说明安装方式，并保留每个插件的 Apps Script 模板。",
+    question: "What is Addlet?",
+    answer: "Addlet builds focused Google Workspace add-ons. The first product is Image Markup for visual review inside Google Docs workflows.",
   },
   {
-    question: "新增插件要改很多页面吗？",
-    answer: "通常只需要新增插件目录，并在 lib/plugins.ts 维护元数据，首页目录和详情页会复用同一份数据。",
+    question: "What does Image Markup access?",
+    answer: "It accesses the selected Docs image, uploaded images, temporary session tokens, and workflow outputs only when needed to provide the image editing flow.",
   },
   {
-    question: "可以作为正式发布页使用吗？",
-    answer: "可以。当前布局按产品官网方式组织，有首屏价值主张、核心入口、功能说明、使用步骤和常见问题。",
+    question: "Is AI generation required?",
+    answer: "No. You can use Image Markup for annotation and export without generating a clean AI revision.",
   },
   {
-    question: "代码和介绍内容会分离吗？",
-    answer: "会。插件代码放在 plugins/*/appscript，网站内容和目录信息由 Next.js 页面与插件元数据驱动。",
+    question: "Where can I read the privacy terms?",
+    answer: "The Image Markup privacy policy and terms are linked from the product page footer and explain data use, retention, and support contact details.",
   },
   {
-    question: "是否只支持 Google Docs 插件？",
-    answer: "不是。当前目录覆盖 Docs、Calendar、Drive、Sheets 等主应用，后续也可以继续扩展 Gmail 或 Slides。",
+    question: "Who is Image Markup for?",
+    answer: "It is for Docs users and content teams that need to explain visual edits clearly and keep a clean final image for the document.",
   },
   {
-    question: "图片标注插件现在是什么状态？",
-    answer: "Image Markup 是 prototype 状态，已经包含 Docs 图片扫描、外部画布标注、Drive 保存和 RunningHub 修订流程。",
+    question: "How do I get support?",
+    answer: "For support, privacy, or legal questions, contact a17369332769@gmail.com.",
   },
 ];
 
@@ -80,41 +78,41 @@ export default function Home() {
   return (
     <main>
       <header className="site-header">
-        <Link className="brand" href="/" aria-label="Workspace Add-ons Lab">
+        <Link className="brand" href="/" aria-label="Addlet">
           <span className="brand__mark">
             <Blocks size={19} aria-hidden="true" />
           </span>
-          <span>Workspace Add-ons Lab</span>
+          <span>Addlet</span>
         </Link>
         <nav className="nav-links" aria-label="Primary navigation">
-          <a href="#features">功能</a>
-          <a href="#how-to-use">使用方式</a>
+          <a href="#features">Features</a>
+          <a href="#how-to-use">How It Works</a>
           <a href="#faq">FAQ</a>
         </nav>
-        <Link className="button button--primary header-cta" href="#plugins">
-          查看插件
+        <Link className="button button--primary header-cta" href="/plugins/image-markup">
+          View Product
         </Link>
       </header>
 
       <section className="hero hero--centered">
         <div className="hero__content">
-          <p className="eyebrow">Google Workspace Add-ons</p>
+          <p className="eyebrow">Google Docs image review</p>
           <h1>
-            一个清晰的插件官网，
-            <span>从介绍页到 Apps Script 模板都放好。</span>
+            Image feedback that stays clear,
+            <span>from markup to clean revision.</span>
           </h1>
           <p className="hero__copy">
-            参考 AI transcription 官网的产品页节奏，重排为居中首屏、三入口卡片、交错功能介绍、三步使用指南与 FAQ，
-            让插件目录更像可发布的 Workspace 产品主页。
+            Addlet Image Markup helps Google Docs users select an image, draw precise visual notes, export annotated PNGs,
+            and generate clean revised images when they need a polished final asset.
           </p>
           <div className="hero__actions">
-            <Link className="button button--primary" href="#plugins">
+            <Link className="button button--primary" href="/plugins/image-markup">
               <Sparkles size={18} />
-              浏览插件目录
+              Explore Image Markup
             </Link>
             <a className="button" href="https://developers.google.com/workspace/add-ons" target="_blank">
               <ArrowUpRight size={18} />
-              Google Add-ons 文档
+              Google Workspace add-ons
             </a>
           </div>
         </div>
@@ -134,20 +132,20 @@ export default function Home() {
 
       <section className="section" id="features" aria-label="Workspace add-on features">
         <div className="section__header section__header--center">
-          <p className="eyebrow">Why Choose This Lab?</p>
-          <h2>把插件想法做成完整产品入口</h2>
+          <p className="eyebrow">Why Addlet</p>
+          <h2>Designed for visual feedback in documents</h2>
           <p>
-            首页不再只是目录，而是用产品介绍页的方式解释价值、展示入口，并把插件开发流程从代码目录延伸到用户可理解的网页。
+            Image Markup keeps image review close to the Google Docs workflow while giving reviewers a dedicated canvas for clear, visual instructions.
           </p>
         </div>
 
         <div className="feature-showcase">
           <article className="feature-row">
             <div className="feature-copy">
-              <span className="feature-kicker">01 / Catalog</span>
-              <h3>插件卡片即产品入口</h3>
+              <span className="feature-kicker">01 / Select</span>
+              <h3>Start from the image being discussed</h3>
               <p>
-                三个核心插件被放在首屏下方，用户可以像参考站选择“上传文件、实时转写、录音转写”一样，直接选择自己的 Workspace 工作流。
+                Select an inline image from Google Docs or upload a local file, then move directly into a focused editor without creating a separate feedback document.
               </p>
             </div>
             <div className="product-preview product-preview--blue">
@@ -157,52 +155,52 @@ export default function Home() {
                 <span />
               </div>
               <div className="preview-card">
-                <Mic size={30} />
-                <strong>Workspace workflow</strong>
-                <p>Docs, Calendar, Drive and Sheets add-ons are grouped by use case.</p>
+                <ImageIcon size={30} />
+                <strong>Docs image workflow</strong>
+                <p>Select, mark up, export, and return to your document.</p>
               </div>
             </div>
           </article>
 
           <article className="feature-row feature-row--reverse">
             <div className="feature-copy">
-              <span className="feature-kicker">02 / Templates</span>
-              <h3>Apps Script 模板保持可复制</h3>
+              <span className="feature-kicker">02 / Annotate</span>
+              <h3>Make visual instructions unambiguous</h3>
               <p>
-                每个插件仍然保留独立目录、manifest、Code.gs 与 README。网站负责解释，目录负责交付代码，二者互不打架。
+                Arrows, boxes, freehand marks, and text notes let collaborators understand the requested edit by looking at the image instead of decoding long comments.
               </p>
             </div>
             <div className="product-preview product-preview--green">
               <div className="code-stack">
-                <span>plugins / image-markup</span>
-                <span>appscript / Code.js</span>
-                <span>appscript / appsscript.json</span>
-                <span>README.md</span>
+                <span>Freehand notes</span>
+                <span>Arrow callouts</span>
+                <span>Box highlights</span>
+                <span>Text labels</span>
               </div>
             </div>
           </article>
 
           <article className="feature-row">
             <div className="feature-copy">
-              <span className="feature-kicker">03 / Publishing</span>
-              <h3>官网结构适合继续扩展</h3>
+              <span className="feature-kicker">03 / Deliver</span>
+              <h3>Keep both the review artifact and the final image</h3>
               <p>
-                功能区、使用方式和 FAQ 都按可增长的信息架构组织，后续可以自然加入安装按钮、 Marketplace 链接、截图与视频。
+                Export a marked-up PNG for handoff, or use the AI revision flow to create a clean image that can be used back in the document.
               </p>
             </div>
             <div className="product-preview product-preview--amber">
               <div className="metric-grid">
                 <span>
-                  <strong>{plugins.length}</strong>
-                  plugins
+                  <strong>Docs</strong>
+                  host
                 </span>
                 <span>
-                  <strong>6</strong>
-                  hosts
+                  <strong>PNG</strong>
+                  export
                 </span>
                 <span>
-                  <strong>1</strong>
-                  prototype
+                  <strong>AI</strong>
+                  revision
                 </span>
               </div>
             </div>
@@ -213,7 +211,7 @@ export default function Home() {
       <section className="section section--soft" id="how-to-use">
         <div className="section__header">
           <p className="eyebrow">How To Use</p>
-          <h2>三步进入插件开发流</h2>
+          <h2>Three steps from image to decision</h2>
         </div>
         <div className="step-grid">
           {workflowSteps.map((step, index) => (
@@ -228,11 +226,13 @@ export default function Home() {
 
       <section className="section" id="plugins">
         <div className="section__header section__header--center">
-          <p className="eyebrow">Plugin Catalog</p>
-          <h2>当前插件</h2>
+          <p className="eyebrow">Product</p>
+          <h2>Image Markup for Google Docs</h2>
         </div>
         <div className="plugin-grid">
-          {plugins.map((plugin) => (
+          {plugins
+            .filter((plugin) => plugin.slug === "image-markup")
+            .map((plugin) => (
             <Link className="plugin-card" href={`/plugins/${plugin.slug}`} key={plugin.slug}>
               <div className="plugin-card__top">
                 {plugin.iconPath ? (
@@ -244,7 +244,7 @@ export default function Home() {
                 )}
                 <ArrowUpRight size={18} aria-hidden="true" />
               </div>
-              <span className="status">{plugin.status}</span>
+              <span className="status">Google Docs add-on</span>
               <h3>{plugin.name}</h3>
               <p>{plugin.tagline}</p>
               <div className="host-list">
@@ -260,7 +260,7 @@ export default function Home() {
       <section className="section section--soft" id="faq">
         <div className="section__header">
           <p className="eyebrow">FAQ</p>
-          <h2>常见问题</h2>
+          <h2>Frequently Asked Questions</h2>
         </div>
         <div className="faq-grid">
           {faqs.map((item) => (
@@ -274,13 +274,13 @@ export default function Home() {
       </section>
 
       <footer className="footer">
-        <Link className="brand" href="/" aria-label="Workspace Add-ons Lab">
+        <Link className="brand" href="/" aria-label="Addlet">
           <span className="brand__mark">
             <FileCode2 size={19} aria-hidden="true" />
           </span>
-          <span>Workspace Add-ons Lab</span>
+          <span>Addlet</span>
         </Link>
-        <p>Built for fast Google Workspace add-on prototyping.</p>
+        <p>Focused Google Workspace add-ons for clearer document workflows.</p>
       </footer>
     </main>
   );

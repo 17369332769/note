@@ -28,7 +28,7 @@ pnpm install
 pnpm dev
 ```
 
-本地开发时打开 `http://localhost:3000` 查看插件目录。线上地址是 `https://note-bice-seven.vercel.app`。
+本地开发时打开 `http://localhost:3000` 查看插件目录。线上地址是 `https://www.addlet.pro`。
 
 图片标注编辑器支持用启动命令指定默认插件环境：
 

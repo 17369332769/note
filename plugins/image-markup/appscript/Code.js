@@ -55,13 +55,6 @@ function showImageMarkupHelp() {
 }
 
 /**
- * Backward-compatible menu entry for older deployments.
- */
-function showImageMarkupDialog() {
-  showImageMarkupSidebar();
-}
-
-/**
  * Opens the full editor in a Docs dialog.
  *
  * @param {Object=} params Editor query parameters.
@@ -240,7 +233,7 @@ function buildErrorResponse_(error) {
  */
 function getEditorBaseUrl_() {
   const configured = PropertiesService.getScriptProperties().getProperty('EDITOR_BASE_URL');
-  return configured || 'https://note-bice-seven.vercel.app';
+  return configured || 'https://www.addlet.pro';
 }
 
 /**

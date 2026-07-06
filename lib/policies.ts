@@ -68,10 +68,10 @@ function getUseSummary(plugin: Plugin) {
 
 function getThirdPartySummary(plugin: Plugin) {
   if (plugin.slug === "image-markup") {
-    return "Image Markup may send the original image, annotated image, and edit brief to the configured AI image generation provider only when you choose to generate a clean revision. It may also store temporary image objects in the configured Cloudflare R2 bucket for upload, download, and provider handoff.";
+    return "Image Markup may send the original image, annotated image, and edit brief to RunningHub only when you choose to generate a clean revision. It may also store temporary image objects in Cloudflare R2 or equivalent private object storage for upload, download, and provider handoff.";
   }
 
-  return `${plugin.name} is designed as a Google Workspace add-on template. It does not sell user data and should only share data with third-party services when the operator explicitly adds integrations required for the workflow.`;
+  return `${plugin.name} does not sell user data and should only share data with third-party services when the operator explicitly adds integrations required for the workflow.`;
 }
 
 function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
@@ -80,7 +80,7 @@ function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
     eyebrow: "Privacy Policy",
     summary:
       "This policy explains what Workspace data this plugin accesses, how that data is used, and how the plugin follows Google API Services User Data Policy requirements.",
-    effectiveDate: "2026-07-03",
+    effectiveDate: "2026-07-06",
     sections: [
       {
         title: "Information We Access",
@@ -111,9 +111,10 @@ function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
       {
         title: "Retention and Deletion",
         body: [
-          "Workspace content is kept only as long as needed for the active workflow, configured storage, troubleshooting, or legal obligations.",
+          "Workspace content is kept only as long as needed for the active workflow, configured storage, troubleshooting, or legal obligations. Temporary image objects are normally deleted or expired within 30 days unless a user or administrator configures a shorter retention period.",
+          "Operational logs used for security and reliability are normally retained for up to 90 days, unless a longer period is required to investigate abuse, security incidents, service errors, or legal obligations.",
           "If the plugin is deployed by your organization, deletion timing may depend on that organization's Google Workspace, Apps Script, Drive, and storage configuration.",
-          "To request deletion of data controlled by the plugin operator, use the support or contact channel published with the deployed plugin listing.",
+          "To request deletion of data controlled by the plugin operator, contact a17369332769@gmail.com and include the Google account, document context, and approximate time of the workflow when possible.",
         ],
       },
       {
@@ -140,7 +141,7 @@ function buildTermsPolicy(plugin: Plugin): PolicyDocument {
     eyebrow: "Terms of Service",
     summary:
       "These terms describe the rules for using this Google Workspace plugin, including acceptable use, account responsibility, service limitations, and disclaimers.",
-    effectiveDate: "2026-07-03",
+    effectiveDate: "2026-07-06",
     sections: [
       {
         title: "Acceptance of Terms",
@@ -188,7 +189,7 @@ function buildTermsPolicy(plugin: Plugin): PolicyDocument {
       {
         title: "Contact",
         body: [
-          "For support, legal, privacy, or billing questions, use the contact channel published with the deployed plugin listing or the project owner's support page.",
+          "For support, legal, privacy, or billing questions, contact a17369332769@gmail.com.",
         ],
       },
     ],
@@ -201,12 +202,12 @@ function buildRefundPolicy(plugin: Plugin): PolicyDocument {
     eyebrow: "Refund Policy",
     summary:
       "This policy explains how refunds are handled if a paid version, subscription, or marketplace listing is attached to this plugin.",
-    effectiveDate: "2026-07-03",
+    effectiveDate: "2026-07-06",
     sections: [
       {
-        title: "Free Templates and Prototypes",
+        title: "Free Access",
         body: [
-          `${plugin.name} is currently marked as ${plugin.status}. If it is distributed for free, no purchase is charged and no refund is required.`,
+          `${plugin.name} is currently distributed for free. No purchase is charged and no refund is required for free access.`,
           "If a future paid plan or marketplace purchase is offered, the refund terms below apply unless the listing states a more specific policy.",
         ],
       },
@@ -220,7 +221,7 @@ function buildRefundPolicy(plugin: Plugin): PolicyDocument {
       {
         title: "How to Request a Refund",
         body: [
-          "Send the purchase account, order identifier, plugin name, billing date, and a short description of the issue through the support channel published with the plugin listing.",
+          "Send the purchase account, order identifier, plugin name, billing date, and a short description of the issue to a17369332769@gmail.com.",
           "We may ask for diagnostic details needed to verify the issue, such as Workspace host, browser, deployment configuration, or error messages.",
         ],
       },

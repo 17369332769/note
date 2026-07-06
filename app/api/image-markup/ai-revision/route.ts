@@ -1,10 +1,13 @@
-import { buildImageEditPrompt, hashPrompt, imageMarkupPromptVersion } from "@/lib/image-markup/aiPrompt";
 import {
-  createImgv2ImageGeneration,
-  getConfiguredImageGenerationProvider,
-  getImgv2ImageGenerationConfig,
-} from "@/lib/image-markup/imageGeneration";
-import { createR2DownloadUrl, createR2UploadUrl } from "@/lib/image-markup/r2";
+  createOrGetAiRevisionJob,
+  getAiRevisionJob,
+  markAiRevisionJobCompleted,
+  markAiRevisionJobFailed,
+  markAiRevisionJobPending,
+  type AiRevisionJob,
+} from "@/lib/image-markup/aiRevisionJobs";
+import { buildImageEditPrompt, hashPrompt } from "@/lib/image-markup/aiPrompt";
+import { uploadR2Object } from "@/lib/image-markup/r2";
 import { describeRunningHubError, normalizeRunningHubAspectRatio, pickScalarString } from "@/lib/image-markup/runninghub";
 import { assertAiRevisionSessionAccess } from "@/lib/image-markup/sessionAccess";
 import { consumeAiRevisionSessionQuota } from "@/lib/image-markup/sessionRateLimit";
@@ -14,13 +17,13 @@ import { jsonWithCors, optionsWithCors } from "../cors";
 const runningHubDefaultEditUrl = "https://www.runninghub.cn/openapi/v2/rhart-image-g-2-official/image-to-image";
 const runningHubDefaultQueryUrl = "https://www.runninghub.cn/openapi/v2/query";
 const maxDefaultImageBytes = 10 * 1024 * 1024;
-const pollDelayMs = 2000;
-const maxPollAttempts = 45;
 
 type DecodedImage = {
   bytes: Uint8Array;
   mimeType: "image/png" | "image/jpeg" | "image/webp";
 };
+
+type GeneratedImage = DecodedImage;
 
 type RunningHubImageToImagePayload = {
   prompt: string;
@@ -30,19 +33,19 @@ type RunningHubImageToImagePayload = {
   quality: "low";
 };
 
+type RunningHubQueryResult =
+  | { status: "pending" }
+  | { status: "completed"; outputUrl: string }
+  | { status: "failed"; error: string };
+
 export function OPTIONS() {
   return optionsWithCors();
 }
 
 export async function POST(request: Request) {
-  const provider = getConfiguredImageGenerationProvider();
   const runningHubApiKey = process.env.RUNNINGHUB_API_KEY;
-  const imgv2Config = getImgv2ImageGenerationConfig();
-  if (provider === "runninghub" && !runningHubApiKey) {
+  if (!runningHubApiKey) {
     return jsonWithCors({ ok: false, error: "RUNNINGHUB_API_KEY is not configured." }, { status: 503 });
-  }
-  if (provider === "imgv2" && !imgv2Config.apiKey) {
-    return jsonWithCors({ ok: false, error: "IMGV2_API_KEY is not configured." }, { status: 503 });
   }
 
   let payload: AiRevisionRequest;
@@ -57,6 +60,7 @@ export async function POST(request: Request) {
     return jsonWithCors({ ok: false, error: validationError }, { status: 400 });
   }
 
+  const requestId = payload.requestId || hashPrompt(JSON.stringify(payload));
   let tokenClaims: Awaited<ReturnType<typeof assertAiRevisionSessionAccess>> | null = null;
   try {
     tokenClaims = await assertAiRevisionSessionAccess(payload);
@@ -67,128 +71,205 @@ export async function POST(request: Request) {
     );
   }
 
+  let stage = "prepare";
+  let createdJob: AiRevisionJob | null = null;
   try {
-    const quota = await consumeAiRevisionSessionQuota({
-      sessionId: payload.sessionId,
-      resetAt: tokenClaims?.exp ? new Date(tokenClaims.exp * 1000).toISOString() : undefined,
-    });
-    if (!quota.allowed) {
-      return jsonWithCors(
-        {
-          ok: false,
-          error: `This editing session has reached the ${quota.limit} generation limit.`,
-          limit: quota.limit,
-          remaining: quota.remaining,
-          resetAt: quota.resetAt,
-        },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(Math.max(60, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000))),
-          },
-        },
-      );
-    }
-  } catch (error) {
-    return jsonWithCors(
-      { ok: false, error: error instanceof Error ? error.message : "Could not verify generation limit." },
-      { status: 503 },
-    );
-  }
-
-  try {
-    const maxImageBytes = Number(process.env.IMAGE_MARKUP_MAX_IMAGE_BYTES || maxDefaultImageBytes);
+    stage = "validate-input-images";
     const imageUrls = getPreparedImageUrls(payload);
-    if (!imageUrls) {
-      decodeImageDataUrl(payload.originalImageDataUrl || "", maxImageBytes);
-      decodeImageDataUrl(payload.annotatedImageDataUrl || "", maxImageBytes);
-    }
+
+    stage = "build-prompt";
     const prompt = buildImageEditPrompt({
       editBrief: payload.editBrief,
       aspectRatio: payload.aspectRatio,
     });
     const promptHash = hashPrompt(prompt);
-
-    const revision =
-      provider === "imgv2"
-        ? await createImgv2ImageGeneration(
-            imgv2Config,
-            buildImgv2RevisionPrompt({
-              prompt,
-              imageUrls: imageUrls || (await prepareRunningHubImageUrls(payload)),
-            }),
-          )
-        : await createRunningHubRevision(runningHubApiKey || "", payload, prompt, imageUrls);
-
-    return jsonWithCors({
-      ok: true,
-      revisedImageDataUrl: revision.revisedImageDataUrl,
-      provider,
-      taskId: revision.taskId,
-      promptVersion: imageMarkupPromptVersion,
+    const { created, job } = await createOrGetAiRevisionJob({
+      requestId,
+      sessionId: payload.sessionId,
+      provider: "runninghub",
       promptHash,
-      resolution: provider === "runninghub" ? "1k" : imgv2Config.size,
-      quality: provider === "runninghub" ? "low" : imgv2Config.modelConfigKey,
-      model: provider === "imgv2" ? imgv2Config.model : "rhart-image-g-2-official",
-      modelConfigKey: provider === "imgv2" ? imgv2Config.modelConfigKey : undefined,
-      size: provider === "imgv2" ? imgv2Config.size : undefined,
-      generatedAt: new Date().toISOString(),
+      resolution: "1k",
+      quality: "low",
+      model: "rhart-image-g-2-official",
     });
+
+    if (!created) {
+      return jsonWithCors(toJobResponse(job));
+    }
+    createdJob = job;
+
+    stage = "consume-quota";
+    const quota = await consumeAiRevisionSessionQuota({
+      sessionId: payload.sessionId,
+      resetAt: tokenClaims?.exp ? new Date(tokenClaims.exp * 1000).toISOString() : undefined,
+    });
+    if (!quota.allowed) {
+      const failedJob = await markAiRevisionJobFailed({
+        sessionId: payload.sessionId,
+        jobId: job.jobId,
+        error: `This editing session has reached the ${quota.limit} generation limit.`,
+      });
+      return jsonWithCors(toJobResponse(failedJob), {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.max(60, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000))),
+        },
+      });
+    }
+
+    stage = "create-runninghub-task";
+    const taskId = await createRunningHubTask(runningHubApiKey || "", {
+      prompt,
+      imageUrls,
+      aspectRatio: normalizeRunningHubAspectRatio(payload.aspectRatio || inferAspectRatio()),
+      resolution: "1k",
+      quality: "low",
+    });
+    const pendingJob = await markAiRevisionJobPending({
+      sessionId: payload.sessionId,
+      jobId: job.jobId,
+      taskId,
+    });
+
+    return jsonWithCors(toJobResponse(pendingJob), { status: 202 });
   } catch (error) {
-    return jsonWithCors(
-      {
-        ok: false,
+    console.error("[image-markup] AI revision start failed", {
+      sessionId: payload.sessionId,
+      provider: "runninghub",
+      stage,
+      error: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    if (createdJob) {
+      await markAiRevisionJobFailed({
+        sessionId: payload.sessionId,
+        jobId: createdJob.jobId,
         error: error instanceof Error ? error.message : "AI revision failed.",
-      },
+      }).catch(() => null);
+    }
+    return jsonWithCors(
+      { ok: false, error: error instanceof Error ? error.message : "AI revision failed." },
       { status: 502 },
     );
   }
 }
 
-async function createRunningHubRevision(
-  apiKey: string,
-  payload: AiRevisionRequest,
-  prompt: string,
-  imageUrls: [string, string] | null,
-) {
-  const runningHubImageUrls = imageUrls || (await prepareRunningHubImageUrls(payload));
-  const taskId = await createRunningHubTask(apiKey, {
-    prompt,
-    imageUrls: runningHubImageUrls,
-    aspectRatio: normalizeRunningHubAspectRatio(payload.aspectRatio || inferAspectRatio()),
-    resolution: "1k",
-    quality: "low",
-  });
-  const outputUrl = await waitForRunningHubResult(apiKey, taskId);
-  return {
-    revisedImageDataUrl: await fetchResultAsPngDataUrl(outputUrl),
-    taskId,
-  };
-}
+export async function GET(request: Request) {
+  const runningHubApiKey = process.env.RUNNINGHUB_API_KEY;
+  if (!runningHubApiKey) {
+    return jsonWithCors({ ok: false, error: "RUNNINGHUB_API_KEY is not configured." }, { status: 503 });
+  }
 
-function buildImgv2RevisionPrompt(args: { prompt: string; imageUrls: [string, string] }) {
-  return `
-${args.prompt}
+  const { searchParams } = new URL(request.url);
+  const sessionId = searchParams.get("sessionId") || "";
+  const sessionToken = searchParams.get("sessionToken") || "";
+  const jobId = searchParams.get("jobId") || "";
+  if (!sessionId) return jsonWithCors({ ok: false, error: "sessionId is required." }, { status: 400 });
+  if (!sessionToken) return jsonWithCors({ ok: false, error: "sessionToken is required." }, { status: 400 });
+  if (!jobId) return jsonWithCors({ ok: false, error: "jobId is required." }, { status: 400 });
 
-Reference images:
-- Original image URL: ${args.imageUrls[0]}
-- Annotated instruction image URL: ${args.imageUrls[1]}
+  try {
+    await assertAiRevisionSessionAccess({ sessionId, sessionToken });
+  } catch (error) {
+    return jsonWithCors(
+      { ok: false, error: error instanceof Error ? error.message : "Invalid editing session." },
+      { status: 403 },
+    );
+  }
 
-Use the original image URL as the base image and the annotated instruction image URL only to understand the requested edits.
-`.trim();
+  let stage = "load-job";
+  try {
+    const job = await getAiRevisionJob({ sessionId, jobId });
+    if (!job) return jsonWithCors({ ok: false, error: "AI revision job was not found." }, { status: 404 });
+    if (job.status !== "pending") return jsonWithCors(toJobResponse(job));
+    if (!job.taskId) return jsonWithCors(toJobResponse(job));
+
+    stage = "query-runninghub-task";
+    const result = await queryRunningHubTask(runningHubApiKey || "", job.taskId);
+    if (result.status === "pending") return jsonWithCors(toJobResponse(job), { status: 202 });
+    if (result.status === "failed") {
+      const failedJob = await markAiRevisionJobFailed({ sessionId, jobId, error: result.error });
+      return jsonWithCors(toJobResponse(failedJob), { status: 502 });
+    }
+
+    stage = "download-runninghub-result";
+    const image = await fetchResultImage(result.outputUrl);
+    stage = "save-generated-image";
+    const completedJob = await saveCompletedJobImage({
+      sessionId,
+      job,
+      image,
+      maxImageBytes: Number(process.env.IMAGE_MARKUP_MAX_IMAGE_BYTES || maxDefaultImageBytes),
+    });
+    return jsonWithCors(toJobResponse(completedJob));
+  } catch (error) {
+    console.error("[image-markup] AI revision poll failed", {
+      sessionId,
+      jobId,
+      provider: "runninghub",
+      stage,
+      error: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : undefined,
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    const failedJob = await markAiRevisionJobFailed({
+      sessionId,
+      jobId,
+      error: error instanceof Error ? error.message : "AI revision polling failed.",
+    }).catch(() => null);
+    return jsonWithCors(
+      failedJob ? toJobResponse(failedJob) : { ok: false, error: "AI revision polling failed." },
+      { status: 502 },
+    );
+  }
 }
 
 function validatePayload(payload: Partial<AiRevisionRequest>) {
   if (!payload.sessionId) return "sessionId is required.";
-  if (!payload.preparedImageUrls && !payload.originalImageDataUrl) return "originalImageDataUrl is required.";
-  if (!payload.preparedImageUrls && !payload.annotatedImageDataUrl) return "annotatedImageDataUrl is required.";
+  if (!payload.preparedImageUrls) return "preparedImageUrls is required.";
   if (!payload.editBrief || typeof payload.editBrief !== "object") return "editBrief is required.";
   if (!Array.isArray(payload.editBrief.annotations)) return "editBrief.annotations must be an array.";
   return "";
 }
 
-function getPreparedImageUrls(payload: Partial<AiRevisionRequest>): [string, string] | null {
-  if (!payload.preparedImageUrls) return null;
+function toJobResponse(job: AiRevisionJob) {
+  const base = {
+    ok: true,
+    status: job.status === "completed" ? "completed" : job.status === "failed" ? "failed" : "pending",
+    jobId: job.jobId,
+    provider: job.provider,
+    taskId: job.taskId,
+    promptVersion: job.promptVersion,
+    promptHash: job.promptHash,
+    resolution: job.resolution,
+    quality: job.quality,
+    model: job.model,
+    generatedAt: job.generatedAt || new Date().toISOString(),
+  };
+  if (job.status === "completed") {
+    return {
+      ...base,
+      status: "completed",
+      revisedImageR2Key: job.revisedImageR2Key,
+      revisedImageUrl: job.revisedImageUrl,
+    };
+  }
+  if (job.status === "failed") {
+    return {
+      ...base,
+      status: "failed",
+      error: job.error || "AI revision failed.",
+    };
+  }
+  return {
+    ...base,
+    status: "pending",
+  };
+}
+
+function getPreparedImageUrls(payload: Partial<AiRevisionRequest>): [string, string] {
+  if (!payload.preparedImageUrls) throw new Error("preparedImageUrls is required.");
   if (!Array.isArray(payload.preparedImageUrls) || payload.preparedImageUrls.length !== 2) {
     throw new Error("preparedImageUrls must contain original and annotated image URLs.");
   }
@@ -209,57 +290,6 @@ function isHttpUrl(value: unknown) {
   }
 }
 
-function decodeImageDataUrl(dataUrl: string, maxBytes: number): DecodedImage {
-  const match = /^data:(image\/png|image\/jpeg|image\/webp);base64,([a-zA-Z0-9+/=]+)$/.exec(dataUrl);
-  if (!match) {
-    throw new Error("Only PNG, JPEG, and WebP image data URLs are supported.");
-  }
-
-  const bytes = Uint8Array.from(Buffer.from(match[2], "base64"));
-  if (bytes.byteLength > maxBytes) {
-    throw new Error("Image payload is too large.");
-  }
-
-  return {
-    bytes,
-    mimeType: match[1] as DecodedImage["mimeType"],
-  };
-}
-
-async function prepareRunningHubImageUrls(payload: AiRevisionRequest): Promise<[string, string]> {
-  if (!payload.originalImageDataUrl || !payload.annotatedImageDataUrl) {
-    throw new Error("originalImageDataUrl and annotatedImageDataUrl are required when preparedImageUrls are missing.");
-  }
-  const [originalKey, annotatedKey] = await Promise.all([
-    uploadDataUrlToR2(payload.originalImageDataUrl, `${payload.sessionId}-runninghub-original.png`),
-    uploadDataUrlToR2(payload.annotatedImageDataUrl, `${payload.sessionId}-runninghub-annotated.png`),
-  ]);
-  const [original, annotated] = await Promise.all([
-    createR2DownloadUrl({ key: originalKey, ttlSeconds: 3600 }),
-    createR2DownloadUrl({ key: annotatedKey, ttlSeconds: 3600 }),
-  ]);
-  return [original.downloadUrl, annotated.downloadUrl];
-}
-
-async function uploadDataUrlToR2(dataUrl: string, filename: string) {
-  const image = decodeImageDataUrl(dataUrl, Number(process.env.IMAGE_MARKUP_MAX_IMAGE_BYTES || maxDefaultImageBytes));
-  const upload = await createR2UploadUrl({
-    contentType: image.mimeType,
-    filename,
-    prefix: "image-markup/runninghub",
-    ttlSeconds: 900,
-  });
-  const response = await fetch(upload.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": image.mimeType },
-    body: Buffer.from(image.bytes),
-  });
-  if (!response.ok) {
-    throw new Error("Could not upload image to R2.");
-  }
-  return upload.key;
-}
-
 async function createRunningHubTask(apiKey: string, payload: RunningHubImageToImagePayload) {
   const response = await fetch(process.env.RUNNINGHUB_IMAGE_EDIT_URL || runningHubDefaultEditUrl, {
     method: "POST",
@@ -277,51 +307,96 @@ async function createRunningHubTask(apiKey: string, payload: RunningHubImageToIm
   return taskId;
 }
 
-async function waitForRunningHubResult(apiKey: string, taskId: string) {
-  for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
-    await sleep(pollDelayMs);
-    const response = await fetch(process.env.RUNNINGHUB_QUERY_URL || runningHubDefaultQueryUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ taskId }),
-    });
-    const json = await readJson(response);
-    const status = String(pickScalarString(json, ["data.status", "status", "data.state", "state"]) || "").toLowerCase();
-    const outputUrl = pickScalarString(json, [
-      "data.imageUrl",
-      "data.image_url",
-      "data.outputUrl",
-      "data.output_url",
-      "data.outputs.0.url",
-      "data.results.0.url",
-      "results.0.url",
-      "data.0.url",
-      "data.result.0.url",
-      "result.0.url",
-      "imageUrl",
-      "outputUrl",
-    ]);
+async function queryRunningHubTask(apiKey: string, taskId: string): Promise<RunningHubQueryResult> {
+  const response = await fetch(process.env.RUNNINGHUB_QUERY_URL || runningHubDefaultQueryUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ taskId }),
+  });
+  const json = await readJson(response);
+  const status = String(pickScalarString(json, ["data.status", "status", "data.state", "state"]) || "").toLowerCase();
+  const outputUrl = pickScalarString(json, [
+    "data.imageUrl",
+    "data.image_url",
+    "data.outputUrl",
+    "data.output_url",
+    "data.outputs.0.url",
+    "data.results.0.url",
+    "results.0.url",
+    "data.0.url",
+    "data.result.0.url",
+    "result.0.url",
+    "imageUrl",
+    "outputUrl",
+  ]);
 
-    if (outputUrl) return outputUrl;
-    if (["failed", "error", "cancelled", "canceled"].includes(status)) {
-      throw new Error(describeRunningHubError(json) || "RunningHub task failed.");
-    }
+  if (!response.ok) {
+    return { status: "failed", error: describeRunningHubError(json) || `RunningHub query failed with ${response.status}.` };
   }
-
-  throw new Error("RunningHub task timed out.");
+  if (outputUrl) return { status: "completed", outputUrl };
+  if (["failed", "error", "cancelled", "canceled"].includes(status)) {
+    return { status: "failed", error: describeRunningHubError(json) || "RunningHub task failed." };
+  }
+  return { status: "pending" };
 }
 
-async function fetchResultAsPngDataUrl(url: string) {
+async function saveCompletedJobImage(input: {
+  sessionId: string;
+  job: AiRevisionJob;
+  image: GeneratedImage;
+  maxImageBytes: number;
+}) {
+  const revisedImage = validateGeneratedImage(input.image, input.maxImageBytes);
+  const revisedUpload = await uploadR2Object({
+    bytes: revisedImage.bytes,
+    contentType: revisedImage.mimeType,
+    filename: `${input.sessionId}-revised-${Date.now()}${getImageExtension(revisedImage.mimeType)}`,
+    prefix: "image-markup/output",
+  });
+  return markAiRevisionJobCompleted({
+    sessionId: input.sessionId,
+    jobId: input.job.jobId,
+    revisedImageR2Key: revisedUpload.key,
+    revisedImageUrl: getR2ObjectUrl(revisedUpload.key),
+  });
+}
+
+async function fetchResultImage(url: string): Promise<GeneratedImage> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error("Could not download RunningHub result image.");
   }
-  const contentType = response.headers.get("content-type") || "image/png";
-  const bytes = Buffer.from(await response.arrayBuffer());
-  return `data:${contentType};base64,${bytes.toString("base64")}`;
+  return {
+    bytes: new Uint8Array(await response.arrayBuffer()),
+    mimeType: normalizeImageContentType(response.headers.get("content-type")),
+  };
+}
+
+function getR2ObjectUrl(key: string) {
+  return `/api/image-markup/r2/object?key=${encodeURIComponent(key)}`;
+}
+
+function getImageExtension(mimeType: DecodedImage["mimeType"]) {
+  if (mimeType === "image/jpeg") return ".jpg";
+  if (mimeType === "image/webp") return ".webp";
+  return ".png";
+}
+
+function validateGeneratedImage(image: GeneratedImage, maxBytes: number): GeneratedImage {
+  if (image.bytes.byteLength > maxBytes) {
+    throw new Error("Generated image payload is too large.");
+  }
+  return image;
+}
+
+function normalizeImageContentType(contentType: string | null): GeneratedImage["mimeType"] {
+  const normalized = (contentType || "").toLowerCase();
+  if (normalized.includes("image/jpeg")) return "image/jpeg";
+  if (normalized.includes("image/webp")) return "image/webp";
+  return "image/png";
 }
 
 async function readJson(response: Response) {
@@ -335,8 +410,4 @@ async function readJson(response: Response) {
 
 function inferAspectRatio() {
   return "1:1";
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

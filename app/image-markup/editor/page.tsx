@@ -40,6 +40,8 @@ const wheelZoomStep = 0.05;
 const maxVersionWidth = 1280;
 const versionGap = 40;
 const workspacePadding = 1600;
+const aiRevisionPollIntervalMs = 3000;
+const aiRevisionMaxPolls = 180;
 
 type PluginAppType = "addon" | "drive";
 type SourceTab = "document" | "upload";
@@ -123,6 +125,10 @@ function parseAiRevisionResponse(text: string): AiRevisionResponse {
 
 function createVersionId() {
   return crypto.randomUUID();
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function createEmptyHistory(): AnnotationHistory {
@@ -986,12 +992,40 @@ export default function WorkspaceImageEditorPage() {
     return uploadBlobToR2(await dataUrlToBlob(dataUrl), filename, prefix);
   }
 
-  async function prepareRunningHubImagesWithR2(originalImageDataUrl: string, annotatedImageDataUrl: string) {
+  async function prepareRunningHubImagesWithR2(sourceImageDataUrl: string, markedImageDataUrl: string) {
     const [originalKey, annotatedKey] = await Promise.all([
-      uploadDataUrlToR2(originalImageDataUrl, `${sessionId}-runninghub-original.png`, "image-markup/runninghub"),
-      uploadDataUrlToR2(annotatedImageDataUrl, `${sessionId}-runninghub-annotated.png`, "image-markup/runninghub"),
+      uploadDataUrlToR2(sourceImageDataUrl, `${sessionId}-runninghub-original.png`, "image-markup/runninghub"),
+      uploadDataUrlToR2(markedImageDataUrl, `${sessionId}-runninghub-annotated.png`, "image-markup/runninghub"),
     ]);
     return Promise.all([getR2DownloadUrl(originalKey), getR2DownloadUrl(annotatedKey)]) as Promise<[string, string]>;
+  }
+
+  async function waitForAiRevisionResult(initialResult: AiRevisionResponse) {
+    if (!initialResult.ok) throw new Error(initialResult.error);
+    if (initialResult.status === "completed") return initialResult;
+    if (initialResult.status === "failed") throw new Error(initialResult.error);
+
+    let latestResult = initialResult;
+    for (let attempt = 0; attempt < aiRevisionMaxPolls; attempt += 1) {
+      await sleep(aiRevisionPollIntervalMs);
+      const params = new URLSearchParams({
+        sessionId,
+        sessionToken,
+        jobId: latestResult.jobId,
+      });
+      const response = await fetch(`/api/image-markup/ai-revision?${params.toString()}`);
+      const responseText = await response.text();
+      const result = parseAiRevisionResponse(responseText);
+      if (!result.ok) throw new Error(result.error);
+      if (result.status === "completed") return result;
+      if (result.status === "failed") throw new Error(result.error);
+      if (!response.ok) {
+        throw new Error("The clean revision status could not be checked.");
+      }
+      latestResult = result;
+    }
+
+    throw new Error("The clean revision is still processing. Please try again in a moment.");
   }
 
   async function generateRevision() {
@@ -1007,42 +1041,47 @@ export default function WorkspaceImageEditorPage() {
     setInsertError("");
 
     const brief = buildEditBrief(sessionId, activeVersion.label, "", annotations, contentScale);
-    const originalImageDataUrl = await getActiveImageDataUrl();
-    const annotatedImageDataUrl = getActiveAnnotatedPngDataUrl();
+    const sourceImageDataUrl = await getActiveImageDataUrl();
+    const markedImageDataUrl = getActiveAnnotatedPngDataUrl();
+    const requestId = createVersionId();
 
     try {
-      const preparedImageUrls = await prepareRunningHubImagesWithR2(originalImageDataUrl, annotatedImageDataUrl);
+      const preparedImageUrls = await prepareRunningHubImagesWithR2(sourceImageDataUrl, markedImageDataUrl);
       const response = await fetch("/api/image-markup/ai-revision", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId,
           sessionToken,
+          requestId,
           preparedImageUrls,
           editBrief: brief,
           aspectRatio: getAspectRatio(activeVersion),
         }),
       });
       const responseText = await response.text();
-      const result = parseAiRevisionResponse(responseText);
-      if (!response.ok || !result.ok) {
-        throw new Error(result.ok ? "The clean revision could not be generated." : result.error);
+      const initialResult = parseAiRevisionResponse(responseText);
+      if (!initialResult.ok) {
+        throw new Error(initialResult.error);
+      }
+      if (!response.ok && initialResult.status !== "failed") {
+        throw new Error("The clean revision could not be started.");
+      }
+      const result = await waitForAiRevisionResult(initialResult);
+
+      if (!result.revisedImageR2Key || !result.revisedImageUrl) {
+        throw new Error("The clean revision was generated, but the saved image reference was missing.");
       }
 
-      const revisedImageR2Key = await uploadDataUrlToR2(
-        result.revisedImageDataUrl,
-        `${sessionId}-revised-${Date.now()}.png`,
-        "image-markup/output",
-      );
       const nextId = createVersionId();
       const nextVersion: ImageVersion = {
         id: nextId,
         label: `Revision ${versions.length}`,
-        url: result.revisedImageDataUrl,
+        url: result.revisedImageUrl,
         width: activeVersion.width,
         height: activeVersion.height,
         offset: { x: 0, y: 0 },
-        r2Key: revisedImageR2Key,
+        r2Key: result.revisedImageR2Key,
       };
       setVersions((current) => [...current, nextVersion]);
       setHistories((current) => ({ ...current, [nextId]: createEmptyHistory() }));
@@ -1223,8 +1262,8 @@ export default function WorkspaceImageEditorPage() {
           {insertState === "inserted" ? "Inserted" : "Insert"}
         </Button>
 
-        {revisionState === "failed" ? <p className={styles.editorStatus}>{revisionError}</p> : null}
-        {insertState === "failed" ? <p className={styles.editorStatus}>{insertError}</p> : null}
+        {revisionState === "failed" ? <p className={styles.editorErrorStatus}>{revisionError}</p> : null}
+        {insertState === "failed" ? <p className={styles.editorErrorStatus}>{insertError}</p> : null}
       </aside>
 
       <section className={styles.canvasStage}>

@@ -51,23 +51,20 @@ export type EditBrief = {
 };
 
 export type AiRevisionMetadata = {
-  provider: "runninghub" | "imgv2";
+  provider: "runninghub";
   taskId: string;
   promptVersion: "image-markup-ai-edit-v1";
   promptHash: string;
   resolution: string;
   quality: string;
   model?: string;
-  modelConfigKey?: string;
-  size?: string;
   generatedAt: string;
 };
 
 export type AiRevisionRequest = {
   sessionId: string;
   sessionToken?: string;
-  originalImageDataUrl?: string;
-  annotatedImageDataUrl?: string;
+  requestId?: string;
   preparedImageUrls?: [string, string];
   editBrief: EditBrief;
   aspectRatio?: string;
@@ -76,7 +73,21 @@ export type AiRevisionRequest = {
 export type AiRevisionResponse =
   | ({
       ok: true;
-      revisedImageDataUrl: string;
+      status: "completed";
+      jobId: string;
+      revisedImageR2Key: string;
+      revisedImageUrl: string;
+    } & AiRevisionMetadata)
+  | ({
+      ok: true;
+      status: "pending";
+      jobId: string;
+    } & AiRevisionMetadata)
+  | ({
+      ok: true;
+      status: "failed";
+      jobId: string;
+      error: string;
     } & AiRevisionMetadata)
   | {
       ok: false;
