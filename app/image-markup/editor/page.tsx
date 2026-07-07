@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, ConfigProvider, InputNumber, Tooltip, Upload as AntUpload } from "antd";
+import { Button, ConfigProvider, InputNumber, message, Tooltip, Upload as AntUpload } from "antd";
 import type { UploadProps } from "antd";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
@@ -1120,6 +1120,7 @@ export default function WorkspaceImageEditorPage() {
         label: latestVersion.label,
       });
       setInsertState("inserted");
+      message.success("Inserted into the document.");
     } catch (error) {
       setInsertError(error instanceof Error ? error.message : "Could not insert the generated image.");
       setInsertState("failed");

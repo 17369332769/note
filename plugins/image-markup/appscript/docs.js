@@ -295,7 +295,8 @@ function insertOutputIntoDocs_(session, outputImageR2Key, label) {
   const imageBlob = fetchR2Blob_(outputImageR2Key, session.id + '-output.png', 'image/png');
   const title = session.revisedImageR2Key ? 'Generated image: ' : 'Marked-up image: ';
   body.appendParagraph(title + (label || session.source.label || session.id)).setHeading(DocumentApp.ParagraphHeading.HEADING3);
-  body.appendImage(imageBlob);
+  const insertedImage = body.appendImage(imageBlob);
+  resizeInsertedOutputImage_(insertedImage, session.source);
 
   const briefText = session.editBrief
     ? JSON.stringify(session.editBrief, null, 2)
@@ -310,6 +311,32 @@ function insertOutputIntoDocs_(session, outputImageR2Key, label) {
   session.status = 'inserted';
   session.updatedAt = new Date().toISOString();
   saveSession_(session);
+}
+
+/**
+ * Keeps inserted output near the original document image size.
+ *
+ * @param {GoogleAppsScript.Document.InlineImage} image Inserted image.
+ * @param {Object} source ImageSource.
+ */
+function resizeInsertedOutputImage_(image, source) {
+  const sourceWidth = Number(source && source.width);
+  const sourceHeight = Number(source && source.height);
+
+  if (Number.isFinite(sourceWidth) && Number.isFinite(sourceHeight) && sourceWidth > 0 && sourceHeight > 0) {
+    image.setWidth(Math.round(sourceWidth));
+    image.setHeight(Math.round(sourceHeight));
+    return;
+  }
+
+  const maxWidth = 480;
+  const currentWidth = image.getWidth();
+  const currentHeight = image.getHeight();
+  if (currentWidth > maxWidth && currentHeight > 0) {
+    const scale = maxWidth / currentWidth;
+    image.setWidth(maxWidth);
+    image.setHeight(Math.max(1, Math.round(currentHeight * scale)));
+  }
 }
 
 /**

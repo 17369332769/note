@@ -173,6 +173,8 @@ assert.doesNotMatch(appsScriptCode, new RegExp("EDITOR" + "_BASE_URL"), "Apps Sc
 
 const docsCode = read("plugins/image-markup/appscript/docs.js");
 assert.doesNotMatch(docsCode, /DocumentApp\.openById/, "Docs-only add-on must use the current document scope instead of opening arbitrary Docs by id");
+assert.match(docsCode, /resizeInsertedOutputImage_/, "Docs insert should resize generated output before adding it to the document");
+assert.match(docsCode, /image\.setWidth/, "Docs insert should preserve a document-friendly image width");
 
 const sessions = read("plugins/image-markup/appscript/sessions.js");
 assert.doesNotMatch(sessions, /getImageUrlBlob_|getSlidesImageBlob_|getDriveImageBlob_/, "Docs-only session routing must not call unsupported source loaders");
