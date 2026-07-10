@@ -265,15 +265,30 @@ export default function WorkspaceImageEditorPage() {
   const sessionId = params.get("sessionId") || "local-session";
   const sessionToken = params.get("sessionToken") || "";
   const sourceLabel = params.get("sourceLabel") || "Workspace image";
+  const sourceR2Key = params.get("sourceR2Key") || "";
   const localUpload = params.get("localUpload") === "1";
   const bridgeEnabled = params.get("bridge") === "1";
   const appType = params.has("apptype") ? getPluginAppType(params.get("apptype")) : getDefaultPluginAppType();
   const styleEnvironment = getPluginStyleEnvironment(appType);
+  const [initialSource] = useState<{ id: string; url: string } | null>(() =>
+    sessionId === "local-session" && sourceR2Key
+      ? {
+          id: createVersionId(),
+          url: getR2ObjectUrl(sourceR2Key),
+        }
+      : null,
+  );
 
   const [tool, setTool] = useState<AnnotationTool>("freehand");
-  const [versions, setVersions] = useState<ImageVersion[]>([]);
-  const [activeVersionId, setActiveVersionId] = useState<string>();
-  const [histories, setHistories] = useState<Record<string, AnnotationHistory>>({});
+  const [versions, setVersions] = useState<ImageVersion[]>(() =>
+    initialSource
+      ? [{ id: initialSource.id, label: "Original", url: initialSource.url, width: 0, height: 0, offset: { x: 0, y: 0 } }]
+      : [],
+  );
+  const [activeVersionId, setActiveVersionId] = useState<string | undefined>(() => initialSource?.id);
+  const [histories, setHistories] = useState<Record<string, AnnotationHistory>>(() =>
+    initialSource ? { [initialSource.id]: createEmptyHistory() } : {},
+  );
   const [selectedId, setSelectedId] = useState<string>();
   const [selectionTarget, setSelectionTarget] = useState<SelectionTarget>();
   const [editingTextId, setEditingTextId] = useState<string>();

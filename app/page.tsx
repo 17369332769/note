@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import type { Route } from "next";
 import {
   ArrowUpRight,
   Blocks,
@@ -10,6 +11,10 @@ import {
   Wand2,
 } from "lucide-react";
 import { plugins } from "@/lib/plugins";
+
+function getPluginProductHref(plugin: (typeof plugins)[number]) {
+  return (plugin.hosts.includes("Figma") ? "/figma/image-markup" : `/plugins/${plugin.slug}`) as Route;
+}
 
 const featuredActions = [
   {
@@ -226,14 +231,18 @@ export default function Home() {
 
       <section className="section" id="plugins">
         <div className="section__header section__header--center">
-          <p className="eyebrow">Product</p>
-          <h2>Image Markup for Google Docs</h2>
+          <p className="eyebrow">Products</p>
+          <h2>Image Markup products</h2>
         </div>
         <div className="plugin-grid">
           {plugins
-            .filter((plugin) => plugin.slug === "image-markup")
+            .filter((plugin) => plugin.slug === "image-markup" || plugin.slug === "figma-image-markup")
             .map((plugin) => (
-            <Link className="plugin-card" href={`/plugins/${plugin.slug}`} key={plugin.slug}>
+            <Link
+              className="plugin-card"
+              href={getPluginProductHref(plugin)}
+              key={plugin.slug}
+            >
               <div className="plugin-card__top">
                 {plugin.iconPath ? (
                   <Image className="plugin-icon" src={plugin.iconPath} alt="" width={64} height={64} aria-hidden="true" />
@@ -244,7 +253,7 @@ export default function Home() {
                 )}
                 <ArrowUpRight size={18} aria-hidden="true" />
               </div>
-              <span className="status">Google Docs add-on</span>
+              <span className="status">{plugin.hosts.includes("Figma") ? "Figma plugin" : "Google Docs add-on"}</span>
               <h3>{plugin.name}</h3>
               <p>{plugin.tagline}</p>
               <div className="host-list">

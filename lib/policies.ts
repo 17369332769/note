@@ -37,6 +37,15 @@ function getPluginDataSummary(plugin: Plugin) {
     ];
   }
 
+  if (plugin.slug === "figma-image-markup") {
+    return [
+      "Selected Figma layer, frame, component, or image content exported as a PNG when you run the plugin.",
+      "Uploaded source images, annotated PNGs, generated revisions, and edit brief JSON when you choose to save, export, or generate outputs.",
+      "Basic source metadata such as selected layer name, dimensions, generated filename, and temporary object keys needed to open the editor.",
+      "Operational logs needed to diagnose errors, protect the service, and confirm that image upload or generation requests completed.",
+    ];
+  }
+
   if (plugin.slug === "meeting-notes") {
     return [
       "Calendar event context that you choose to open with the add-on, such as title, timing, attendees, and meeting metadata.",
@@ -59,6 +68,10 @@ function getUseSummary(plugin: Plugin) {
     return "We use this data to load the selected image, display it in the editor, export annotated copies, generate clean AI revisions when requested, and insert outputs back into your Google Docs workflow.";
   }
 
+  if (plugin.slug === "figma-image-markup") {
+    return "We use this data to export the selected Figma content, load it in the Image Markup editor, export annotated copies, and generate clean AI revisions when requested.";
+  }
+
   if (plugin.slug === "meeting-notes") {
     return "We use this data to create structured meeting documents, connect notes to the source calendar event, and help you manage agendas, minutes, and action items.";
   }
@@ -71,7 +84,27 @@ function getThirdPartySummary(plugin: Plugin) {
     return "Image Markup may send the original image, annotated image, and edit brief to RunningHub only when you choose to generate a clean revision. It may also store temporary image objects in Cloudflare R2 or equivalent private object storage for upload, download, and provider handoff.";
   }
 
+  if (plugin.slug === "figma-image-markup") {
+    return "Figma Image Markup may send the original exported image, annotated image, and edit brief to RunningHub only when you choose to generate a clean revision. It may also store temporary image objects in Cloudflare R2 or equivalent private object storage for upload, download, and provider handoff.";
+  }
+
   return `${plugin.name} does not sell user data and should only share data with third-party services when the operator explicitly adds integrations required for the workflow.`;
+}
+
+function getPlatformPolicySummary(plugin: Plugin) {
+  if (plugin.slug === "figma-image-markup") {
+    return [
+      "Figma file content is accessed through Figma plugin APIs only when you run the plugin and choose a selection to export.",
+      "Selected content is used only to provide the user-facing export, annotation, revision, and download workflow.",
+      "Human access to user data is limited to cases where the user asks for support, where access is required for security or abuse investigation, or where required by law.",
+    ];
+  }
+
+  return [
+    "Use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.",
+    "Google Workspace data is used only to provide or improve user-facing features that are visible in the plugin workflow.",
+    "Human access to user data is limited to cases where the user asks for support, where access is required for security or abuse investigation, or where required by law.",
+  ];
 }
 
 function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
@@ -79,7 +112,7 @@ function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
     title: `${plugin.name} Privacy Policy`,
     eyebrow: "Privacy Policy",
     summary:
-      "This policy explains what Workspace data this plugin accesses, how that data is used, and how the plugin follows Google API Services User Data Policy requirements.",
+      "This policy explains what product data this plugin accesses, how that data is used, and how platform data is limited to the visible plugin workflow.",
     effectiveDate: "2026-07-06",
     sections: [
       {
@@ -94,12 +127,8 @@ function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
         ],
       },
       {
-        title: "Google API Services and Limited Use",
-        body: [
-          "Use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.",
-          "Google Workspace data is used only to provide or improve user-facing features that are visible in the plugin workflow.",
-          "Human access to user data is limited to cases where the user asks for support, where access is required for security or abuse investigation, or where required by law.",
-        ],
+        title: plugin.slug === "figma-image-markup" ? "Figma Plugin Data Use" : "Google API Services and Limited Use",
+        body: getPlatformPolicySummary(plugin),
       },
       {
         title: "Data Sharing and Third-Party Processing",
@@ -111,17 +140,27 @@ function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
       {
         title: "Retention and Deletion",
         body: [
-          "Workspace content is kept only as long as needed for the active workflow, configured storage, troubleshooting, or legal obligations. Temporary image objects are normally deleted or expired within 30 days unless a user or administrator configures a shorter retention period.",
+          plugin.slug === "figma-image-markup"
+            ? "Exported Figma content is kept only as long as needed for the active workflow, configured storage, troubleshooting, or legal obligations. Temporary image objects are normally deleted or expired within 30 days unless a user or administrator configures a shorter retention period."
+            : "Workspace content is kept only as long as needed for the active workflow, configured storage, troubleshooting, or legal obligations. Temporary image objects are normally deleted or expired within 30 days unless a user or administrator configures a shorter retention period.",
           "Operational logs used for security and reliability are normally retained for up to 90 days, unless a longer period is required to investigate abuse, security incidents, service errors, or legal obligations.",
-          "If the plugin is deployed by your organization, deletion timing may depend on that organization's Google Workspace, Apps Script, Drive, and storage configuration.",
-          "To request deletion of data controlled by the plugin operator, contact a17369332769@gmail.com and include the Google account, document context, and approximate time of the workflow when possible.",
+          plugin.slug === "figma-image-markup"
+            ? "If the plugin is deployed by your organization, deletion timing may depend on that organization's Figma, plugin distribution, and storage configuration."
+            : "If the plugin is deployed by your organization, deletion timing may depend on that organization's Google Workspace, Apps Script, Drive, and storage configuration.",
+          plugin.slug === "figma-image-markup"
+            ? "To request deletion of data controlled by the plugin operator, contact a17369332769@gmail.com and include the Figma account or team context, selected file context, and approximate time of the workflow when possible."
+            : "To request deletion of data controlled by the plugin operator, contact a17369332769@gmail.com and include the Google account, document context, and approximate time of the workflow when possible.",
         ],
       },
       {
         title: "Security",
         body: [
-          "The plugin uses Google Workspace authorization scopes and Apps Script controls to limit access to the data needed for the requested workflow.",
-          "Server-side API keys and provider credentials should be stored in secure deployment environment variables, not in browser code or Apps Script files.",
+          plugin.slug === "figma-image-markup"
+            ? "The plugin uses Figma plugin permissions and explicit user actions to limit access to the selected content needed for the requested workflow."
+            : "The plugin uses Google Workspace authorization scopes and Apps Script controls to limit access to the data needed for the requested workflow.",
+          plugin.slug === "figma-image-markup"
+            ? "Server-side API keys and provider credentials should be stored in secure deployment environment variables, not in Figma plugin UI code."
+            : "Server-side API keys and provider credentials should be stored in secure deployment environment variables, not in browser code or Apps Script files.",
         ],
       },
       {
@@ -168,8 +207,12 @@ function buildTermsPolicy(plugin: Plugin): PolicyDocument {
       {
         title: "Google Workspace Access",
         body: [
-          "The plugin can access Google Workspace data only after the required Google authorization flow and only within the scopes configured for the deployment.",
-          "Revoking the plugin's Google access or uninstalling the add-on may prevent some features from working.",
+          plugin.slug === "figma-image-markup"
+            ? "The plugin can access Figma document content only through Figma plugin APIs and only while the plugin is running in a file where you use it."
+            : "The plugin can access Google Workspace data only after the required Google authorization flow and only within the scopes configured for the deployment.",
+          plugin.slug === "figma-image-markup"
+            ? "Removing the development plugin or published Figma plugin prevents it from exporting future selections."
+            : "Revoking the plugin's Google access or uninstalling the add-on may prevent some features from working.",
         ],
       },
       {

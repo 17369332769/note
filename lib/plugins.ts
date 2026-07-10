@@ -1,11 +1,12 @@
 export type WorkspaceHost = "Gmail" | "Calendar" | "Drive" | "Docs" | "Sheets" | "Slides";
+export type PluginHost = WorkspaceHost | "Figma";
 
 export type Plugin = {
   slug: string;
   name: string;
   tagline: string;
   status: "template" | "prototype" | "ready";
-  hosts: WorkspaceHost[];
+  hosts: PluginHost[];
   summary: string;
   audience: string;
   iconPath?: string;
@@ -39,6 +40,31 @@ export const plugins: Plugin[] = [
       "Copy the appscript folder into Apps Script or push it with clasp.",
       "Deploy a Workspace Add-on test deployment for Google Docs.",
       "Open /image-markup/editor from a Docs annotation session to test PNG, revision, and edit brief export.",
+    ],
+  },
+  {
+    slug: "figma-image-markup",
+    name: "Figma Image Markup",
+    tagline: "Send selected Figma layers into the Image Markup editor.",
+    status: "prototype",
+    hosts: ["Figma"],
+    summary:
+      "A Figma plugin scaffold that exports the current selection as a PNG, uploads it through the existing Image Markup storage API, and opens the shared annotation editor with the exported image already loaded.",
+    audience: "Designers and reviewers who want the same arrows, boxes, freehand notes, text callouts, PNG export, and optional clean-revision flow for Figma selections.",
+    appScriptPath: "plugins/figma/image-markup",
+    features: [
+      "Current Figma selection export to PNG",
+      "Upload handoff through the existing Image Markup R2 API",
+      "Shared Image Markup editor launch with sourceR2Key preloaded",
+      "Annotation tools, PNG export, and edit brief behavior reused from Image Markup",
+      "Production origin default with a local development origin override",
+    ],
+    setup: [
+      "Deploy the Next.js app with the existing Image Markup R2 upload routes configured.",
+      "Open Figma Desktop, use Plugins > Development > Import plugin from manifest, and select plugins/figma/image-markup/manifest.json.",
+      "Run the plugin on a selected frame, component, image, or layer.",
+      "Confirm the plugin uploads the exported PNG and opens /image-markup/editor with sourceR2Key loaded.",
+      "Keep IMAGE_MARKUP_ALLOW_LOCAL_AI unset unless local or external editor sessions should be allowed to generate AI revisions in production.",
     ],
   },
   {

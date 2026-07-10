@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import type { Route } from "next";
 import { notFound } from "next/navigation";
 import {
   ArrowUpRight,
@@ -78,6 +79,14 @@ export function generatePluginMetadata(plugin: NonNullable<ReturnType<typeof get
     };
   }
 
+  if (plugin.slug === "figma-image-markup") {
+    return {
+      title: "Figma Image Markup | Addlet",
+      description: "Export selected Figma layers into the Image Markup annotation editor.",
+      icons: plugin.iconPath ? [{ url: plugin.iconPath }] : undefined,
+    };
+  }
+
   return {
     title: `${plugin.name} | Addlet`,
     description: plugin.summary,
@@ -108,7 +117,7 @@ function getDetailActions(plugin: NonNullable<ReturnType<typeof getPlugin>>) {
     {
       icon: FileCode2,
       title: "Review the Implementation",
-      description: `Apps Script implementation files are stored in ${plugin.appScriptPath}.`,
+      description: `Implementation files are stored in ${plugin.appScriptPath}.`,
     },
     {
       icon: Sparkles,
@@ -141,9 +150,10 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
   const detailActions = getDetailActions(plugin);
   const detailFaqs = getDetailFaqs(plugin);
   const isImageMarkup = plugin.slug === "image-markup";
-  const productHref = (isImageMarkup ? "/image-markup" : `/plugins/${plugin.slug}`) as
-    | "/image-markup"
-    | `/plugins/${string}`;
+  const implementationLabel = plugin.hosts.includes("Figma") ? "Figma Plugin" : "Apps Script";
+  const productHref = (
+    isImageMarkup ? "/image-markup" : plugin.hosts.includes("Figma") ? "/figma/image-markup" : `/plugins/${plugin.slug}`
+  ) as Route;
   const editorHref = "/image-markup/editor" as const;
 
   return (
@@ -246,7 +256,7 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
       <section className="section" id="features" aria-label={`${plugin.name} features`}>
         <div className="section__header section__header--center">
           {isImageMarkup ? null : <p className="eyebrow">Product Flow</p>}
-          <h2>{isImageMarkup ? "From visual markup to clean revision" : "From document image to clean revision"}</h2>
+          <h2>{isImageMarkup ? "From visual markup to clean revision" : "From source image to clean revision"}</h2>
           <p>
             {isImageMarkup
               ? "Image Markup lets you draw visual feedback directly on an image, reduce back-and-forth, and keep both the annotated handoff and the clean final image in your document workflow."
@@ -369,8 +379,8 @@ export function PluginProductPage({ plugin }: { plugin: NonNullable<ReturnType<t
       ) : (
         <section className="section" id={`${plugin.slug}-script`}>
           <div className="section__header section__header--center">
-            <p className="eyebrow">Apps Script</p>
-            <h2>Script Directory and Feature Structure</h2>
+            <p className="eyebrow">{implementationLabel}</p>
+            <h2>Plugin Directory and Feature Structure</h2>
           </div>
           <div className="script-layout">
             <div className="code-panel">
