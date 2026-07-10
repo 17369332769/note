@@ -117,6 +117,23 @@ export async function getAiRevisionJob(input: { sessionId: string; jobId: string
   return row ? mapJobRow(row) : null;
 }
 
+export async function getLatestCompletedAiRevisionJob(input: { sessionId: string }) {
+  const sql = getSqlClient();
+  await ensureAiRevisionJobsTable(sql);
+
+  const rows = await sql`
+    select *
+    from image_markup_ai_revision_jobs
+    where session_id = ${input.sessionId}
+      and status = 'completed'
+      and revised_image_r2_key is not null
+    order by generated_at desc nulls last, updated_at desc
+    limit 1
+  `;
+  const row = rows[0] as AiRevisionJobRow | undefined;
+  return row ? mapJobRow(row) : null;
+}
+
 export async function markAiRevisionJobPending(input: { sessionId: string; jobId: string; taskId: string }) {
   const sql = getSqlClient();
   await ensureAiRevisionJobsTable(sql);

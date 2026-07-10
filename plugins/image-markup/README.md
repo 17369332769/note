@@ -99,6 +99,7 @@ IMAGE_MARKUP_AI_SESSION_LIMIT=10
 
 The exchange secret is shared only between Apps Script and Next.js. The signing secret must stay only on Next.js.
 AI revision generation is limited per editing session. The default limit is 10 generations per `sessionId`.
+Figma sessions use the same signing secret but are issued by the Next.js server from uploaded Figma R2 source objects. Figma session creation is rate-limited by client address; optional `IMAGE_MARKUP_FIGMA_SESSION_LIMIT` and `IMAGE_MARKUP_FIGMA_SESSION_WINDOW_SECONDS` overrides fall back to `IMAGE_MARKUP_AI_SESSION_LIMIT` and `IMAGE_MARKUP_SESSION_TOKEN_TTL_SECONDS`.
 
 RunningHub configuration:
 

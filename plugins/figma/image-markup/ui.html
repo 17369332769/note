@@ -122,6 +122,7 @@
         <button id="open" disabled>Open editor</button>
       </div>
 
+      <button id="insert" disabled>Insert revision</button>
       <button id="close">Close</button>
       <div class="status" id="status">Select one layer, frame, component, or image, then export it.</div>
     </main>
@@ -129,14 +130,18 @@
     <script>
       const exportButton = document.getElementById("export");
       const openButton = document.getElementById("open");
+      const insertButton = document.getElementById("insert");
       const closeButton = document.getElementById("close");
       const originInput = document.getElementById("origin");
       const statusBox = document.getElementById("status");
       let editorUrl = "";
+      let editingSession = null;
 
       exportButton.addEventListener("click", () => {
         editorUrl = "";
+        editingSession = null;
         openButton.disabled = true;
+        insertButton.disabled = true;
         setStatus("Exporting selected Figma content...");
         parent.postMessage({ pluginMessage: { type: "export-selection" } }, "*");
       });
@@ -144,6 +149,10 @@
       openButton.addEventListener("click", () => {
         if (!editorUrl) return;
         parent.postMessage({ pluginMessage: { type: "open-editor", url: editorUrl } }, "*");
+      });
+
+      insertButton.addEventListener("click", async () => {
+        await insertLatestRevision();
       });
 
       closeButton.addEventListener("click", () => {
@@ -156,6 +165,17 @@
 
         if (message.type === "export-error") {
           setStatus(message.error || "Could not export selection.", "error");
+          return;
+        }
+
+        if (message.type === "insert-success") {
+          setStatus(`Inserted ${message.nodeName || "revision"} into this Figma file.`, "success");
+          return;
+        }
+
+        if (message.type === "insert-error") {
+          setStatus(message.error || "Could not insert the revision.", "error");
+          insertButton.disabled = false;
           return;
         }
 
@@ -189,18 +209,85 @@
             throw new Error(result.error || "Upload failed.");
           }
 
+          const sessionResponse = await fetch(`${origin}/api/image-markup/figma/session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sourceR2Key: result.key,
+              sourceLabel: message.sourceLabel || filename.replace(/\.png$/i, ""),
+              width: message.width,
+              height: message.height,
+              size: bytes.byteLength,
+            }),
+          });
+          const session = await sessionResponse.json().catch(() => ({}));
+          if (!sessionResponse.ok || !session.ok || !session.sessionId || !session.sessionToken) {
+            throw new Error(session.error || "Could not create an editing session.");
+          }
+
           const url = new URL("/image-markup/editor", origin);
+          url.searchParams.set("sessionId", session.sessionId);
+          url.searchParams.set("sessionToken", session.sessionToken);
           url.searchParams.set("localUpload", "1");
           url.searchParams.set("apptype", "drive");
           url.searchParams.set("sourceR2Key", result.key);
           url.searchParams.set("sourceLabel", message.sourceLabel || filename.replace(/\.png$/i, ""));
           editorUrl = url.toString();
+          editingSession = {
+            origin,
+            sessionId: session.sessionId,
+            sessionToken: session.sessionToken,
+            sourceLabel: message.sourceLabel || filename.replace(/\.png$/i, ""),
+          };
           openButton.disabled = false;
-          setStatus("Image is ready. Open the editor to add markup.", "success");
+          insertButton.disabled = false;
+          setStatus("Image is ready. Open the editor, generate a revision, then insert it here.", "success");
         } catch (error) {
           setStatus(error && error.message ? error.message : "Could not prepare the image.", "error");
         } finally {
           exportButton.disabled = false;
+        }
+      }
+
+      async function insertLatestRevision() {
+        if (!editingSession) {
+          setStatus("Export a selection and open the editor first.", "error");
+          return;
+        }
+
+        setStatus("Looking for the latest generated revision...");
+        insertButton.disabled = true;
+
+        try {
+          const params = new URLSearchParams({
+            sessionId: editingSession.sessionId,
+            sessionToken: editingSession.sessionToken,
+          });
+          const response = await fetch(`${editingSession.origin}/api/image-markup/figma/latest-revision?${params.toString()}`);
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || !result.ok || !result.revisedImageUrl) {
+            throw new Error(result.error || "Generate a revision in the editor first.");
+          }
+
+          setStatus("Downloading generated revision...");
+          const imageUrl = new URL(result.revisedImageUrl, editingSession.origin);
+          const imageResponse = await fetch(imageUrl.toString());
+          if (!imageResponse.ok) {
+            throw new Error("Could not download the generated revision.");
+          }
+
+          const bytes = new Uint8Array(await imageResponse.arrayBuffer());
+          setStatus("Inserting generated revision into Figma...");
+          parent.postMessage({
+            pluginMessage: {
+              type: "insert-image",
+              bytes,
+              label: `${editingSession.sourceLabel || "Figma selection"} revised`,
+            },
+          }, "*");
+        } catch (error) {
+          setStatus(error && error.message ? error.message : "Could not insert the generated revision.", "error");
+          insertButton.disabled = false;
         }
       }
 

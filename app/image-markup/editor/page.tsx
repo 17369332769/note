@@ -271,7 +271,7 @@ export default function WorkspaceImageEditorPage() {
   const appType = params.has("apptype") ? getPluginAppType(params.get("apptype")) : getDefaultPluginAppType();
   const styleEnvironment = getPluginStyleEnvironment(appType);
   const [initialSource] = useState<{ id: string; url: string } | null>(() =>
-    sessionId === "local-session" && sourceR2Key
+    sourceR2Key
       ? {
           id: createVersionId(),
           url: getR2ObjectUrl(sourceR2Key),
@@ -533,6 +533,7 @@ export default function WorkspaceImageEditorPage() {
 
   useEffect(() => {
     if (sessionId === "local-session") return;
+    if (sourceR2Key) return;
 
     let cancelled = false;
     const sessionRequest = bridgeEnabled
@@ -572,7 +573,7 @@ export default function WorkspaceImageEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [bridgeEnabled, callAppsScriptBridge, sessionId, sessionToken, setInitialImage]);
+  }, [bridgeEnabled, callAppsScriptBridge, sessionId, sessionToken, setInitialImage, sourceR2Key]);
 
   useLayoutEffect(() => {
     renderCanvas();

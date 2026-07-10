@@ -9,10 +9,6 @@
     "allowedDomains": [
       "https://www.addlet.pro"
     ],
-    "devAllowedDomains": [
-      "http://localhost:3000",
-      "http://127.0.0.1:3000"
-    ],
     "reasoning": "Uploads an exported selection PNG to the Addlet Image Markup API and opens the hosted editor."
   }
 }

@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const defaultSignedUrlTtlSeconds = 15 * 60;
@@ -18,6 +18,10 @@ export type R2DownloadUrlInput = {
 };
 
 export type R2ObjectInput = {
+  key: string;
+};
+
+export type R2ObjectMetadataInput = {
   key: string;
 };
 
@@ -141,6 +145,24 @@ export async function getR2Object(input: R2ObjectInput) {
     bytes,
     contentType: response.ContentType || "application/octet-stream",
     key: normalizeObjectKey(input.key),
+  };
+}
+
+export async function getR2ObjectMetadata(input: R2ObjectMetadataInput) {
+  const config = getR2Config();
+  const client = createR2Client();
+  const key = normalizeObjectKey(input.key);
+  const response = await client.send(
+    new HeadObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+    }),
+  );
+
+  return {
+    contentLength: response.ContentLength || 0,
+    contentType: response.ContentType || "application/octet-stream",
+    key,
   };
 }
 
