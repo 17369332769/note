@@ -103,6 +103,7 @@ function getPlatformPolicySummary(plugin: Plugin) {
   return [
     "Use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements.",
     "Google Workspace data is used only to provide or improve user-facing features that are visible in the plugin workflow.",
+    "We do not retain or use Google Workspace user data to develop, improve, or train generalized or non-personalized artificial intelligence or machine learning models. AI processing is performed only to generate the specific revision requested by the user.",
     "Human access to user data is limited to cases where the user asks for support, where access is required for security or abuse investigation, or where required by law.",
   ];
 }
@@ -113,7 +114,7 @@ function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
     eyebrow: "Privacy Policy",
     summary:
       "This policy explains what product data this plugin accesses, how that data is used, and how platform data is limited to the visible plugin workflow.",
-    effectiveDate: "2026-07-06",
+    effectiveDate: plugin.slug === "image-markup" ? "2026-07-21" : "2026-07-06",
     sections: [
       {
         title: "Information We Access",
@@ -134,6 +135,11 @@ function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
         title: "Data Sharing and Third-Party Processing",
         body: [
           getThirdPartySummary(plugin),
+          ...(plugin.slug === "image-markup"
+            ? [
+                "RunningHub and storage providers process data only on our behalf to deliver the user-requested revision and temporary file transfer. We do not authorize these processors to retain Google Workspace user data for developing, improving, or training generalized or non-personalized AI or machine learning models.",
+              ]
+            : []),
           "We do not sell user data. We do not transfer Google Workspace user data to third parties except as needed to provide the requested plugin functionality, comply with law, or protect the service.",
         ],
       },
@@ -153,15 +159,24 @@ function buildPrivacyPolicy(plugin: Plugin): PolicyDocument {
         ],
       },
       {
-        title: "Security",
-        body: [
-          plugin.slug === "figma-image-markup"
-            ? "The plugin uses Figma plugin permissions and explicit user actions to limit access to the selected content needed for the requested workflow."
-            : "The plugin uses Google Workspace authorization scopes and Apps Script controls to limit access to the data needed for the requested workflow.",
-          plugin.slug === "figma-image-markup"
-            ? "Server-side API keys and provider credentials should be stored in secure deployment environment variables, not in Figma plugin UI code."
-            : "Server-side API keys and provider credentials should be stored in secure deployment environment variables, not in browser code or Apps Script files.",
-        ],
+        title: plugin.slug === "image-markup" ? "Sensitive Data Protection and Security" : "Security",
+        body:
+          plugin.slug === "image-markup"
+            ? [
+                "Google Workspace data and image content are encrypted in transit using HTTPS/TLS. Temporary image objects are stored in private Cloudflare R2 or equivalent private object storage with encryption at rest.",
+                "Temporary objects are not placed in a public bucket. Access is restricted through least-privilege service credentials, short-lived signed URLs, and signed editing-session tokens. Signed object URLs normally expire after 15 minutes, and editing-session tokens expire within six hours or less.",
+                "Server-side API keys, signing secrets, and provider credentials are stored in protected deployment environment variables and are not included in browser code, Apps Script files, or public repositories.",
+                "Administrative and human access is limited to authorized personnel who need it for user-requested support, security or abuse investigation, or legal compliance. Operational logs are limited to service reliability and security purposes and are retained according to the periods described above.",
+                "We apply data minimization and retention controls: only the selected image and workflow metadata needed for the requested action are processed, temporary objects are expired or deleted as described above, and users may request deletion using the contact information in this policy.",
+              ]
+            : [
+                plugin.slug === "figma-image-markup"
+                  ? "The plugin uses Figma plugin permissions and explicit user actions to limit access to the selected content needed for the requested workflow."
+                  : "The plugin uses Google Workspace authorization scopes and Apps Script controls to limit access to the data needed for the requested workflow.",
+                plugin.slug === "figma-image-markup"
+                  ? "Server-side API keys and provider credentials should be stored in secure deployment environment variables, not in Figma plugin UI code."
+                  : "Server-side API keys and provider credentials should be stored in secure deployment environment variables, not in browser code or Apps Script files.",
+              ],
       },
       {
         title: "Changes",
